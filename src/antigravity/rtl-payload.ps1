@@ -2,7 +2,9 @@ function Get-AntigravityRtlPayload {
     @'
 (function () {
   if (window.__ANTIGRAVITY_PLUS_RTL_INSTALLED) {
-    return;
+    // Already running - refresh styles, indicator, and show toast
+    const oldStyle = document.getElementById('antigravity-plus-rtl-style');
+    if (oldStyle) oldStyle.remove();
   }
   window.__ANTIGRAVITY_PLUS_RTL_INSTALLED = true;
 
@@ -107,32 +109,72 @@ function Get-AntigravityRtlPayload {
       /* Antigravity Plus status indicator */
       #antigravity-plus-indicator {
         position: fixed;
-        bottom: 8px;
-        right: 12px;
+        bottom: 12px;
+        left: 12px;
         font-size: 11px;
-        padding: 2px 8px;
-        border-radius: 9999px;
-        background: rgba(16, 185, 129, 0.15);
-        color: #10b981;
-        border: 1px solid rgba(16, 185, 129, 0.3);
+        padding: 4px 10px;
+        border-radius: 6px;
+        background: #064e3b;
+        color: #34d399;
+        border: 1px solid #059669;
         z-index: 999999;
-        pointer-events: none;
-        font-family: ui-sans-serif, system-ui, sans-serif;
-        font-weight: 500;
-        letter-spacing: 0.025em;
-        opacity: 0.85;
-        transition: opacity 0.2s ease;
+        font-family: system-ui, -apple-system, sans-serif;
+        font-weight: 600;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        cursor: default;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+      }
+      #antigravity-plus-indicator:hover {
+        transform: translateY(-2px);
       }
     `;
     (document.head || document.documentElement).appendChild(style);
   }
 
+  function showLaunchToast(message) {
+    let toast = document.getElementById('antigravity-plus-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'antigravity-plus-toast';
+      document.body.appendChild(toast);
+    }
+    toast.innerHTML = message || '✨ <b>Antigravity Plus</b> is active (RTL Enabled)';
+    Object.assign(toast.style, {
+      position: 'fixed',
+      top: '16px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      backgroundColor: '#059669',
+      color: '#ffffff',
+      padding: '10px 22px',
+      borderRadius: '8px',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+      zIndex: '9999999',
+      fontSize: '13px',
+      fontWeight: '500',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      pointerEvents: 'none',
+      opacity: '1',
+      transition: 'opacity 0.4s ease, transform 0.4s ease'
+    });
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(-50%) translateY(-10px)';
+    }, 4000);
+  }
+
   function addIndicator() {
-    if (document.getElementById('antigravity-plus-indicator')) return;
-    const badge = document.createElement('div');
-    badge.id = 'antigravity-plus-indicator';
-    badge.textContent = 'Plus RTL';
-    document.body.appendChild(badge);
+    let badge = document.getElementById('antigravity-plus-indicator');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.id = 'antigravity-plus-indicator';
+      document.body.appendChild(badge);
+    }
+    badge.innerHTML = '⚡ <span>Antigravity Plus · RTL</span>';
   }
 
   const TEXT_TAGS = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE', 'TH', 'TD'];
@@ -211,6 +253,7 @@ function Get-AntigravityRtlPayload {
   injectStyles();
   processTree(document.body);
   addIndicator();
+  showLaunchToast();
 
   // MutationObserver with debounce for high-volume streaming
   let debounceTimer = null;

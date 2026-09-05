@@ -4,6 +4,7 @@ param(
     [switch]$Restore,
     [switch]$Launch,
     [switch]$LiveInject,
+    [switch]$NewWindow,
     [int]$Port = 0,
     [switch]$Silent
 )
@@ -49,7 +50,7 @@ if ($Restore) {
 }
 
 if ($Launch) {
-    Launch-AntigravityPlus -PreferredPort $Port
+    Launch-AntigravityPlus -PreferredPort $Port -NewWindow:$NewWindow
     exit 0
 }
 
