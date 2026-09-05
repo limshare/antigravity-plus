@@ -1,0 +1,15 @@
+# Local and temporary files
+scratch/
+temp/
+*.log
+*.tmp
+
+# Installer dist output
+dist/
+
+# PowerShell temporary artifacts
+*.ps1xml
+*~
+
+# Windows desktop shortcuts and backups
+*.lnk.bak
