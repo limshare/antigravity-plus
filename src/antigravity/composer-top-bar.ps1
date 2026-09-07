@@ -3,6 +3,7 @@ function Get-AntigravityComposerTopBarPayload {
 (function () {
   const TOP_BAR_ATTR = 'data-gemini-plus-composer-top-bar';
   const NEW_CHAT_BTN_ATTR = 'data-gemini-plus-composer-new-chat';
+  const GIT_GROUP_ATTR = 'data-gemini-plus-composer-git-group';
   const COMMIT_BTN_ATTR = 'data-gemini-plus-composer-commit';
   const PUSH_BTN_ATTR = 'data-gemini-plus-composer-push';
   const BRANCH_VAL_ATTR = 'data-gemini-plus-composer-branch';
@@ -305,22 +306,31 @@ function Get-AntigravityComposerTopBarPayload {
 
   function getGitActionStates() {
     let vcsBtn = Array.from(document.querySelectorAll('button')).find((b) => {
-      const text = (b.innerText || '').trim();
-      return text === 'Push' || text === 'Commit';
+      if (b.closest('[' + TOP_BAR_ATTR + ']')) return false;
+      if (b.closest('[role="dialog"], [role="menu"], [data-radix-popper-content-wrapper]')) return false;
+      const text = (b.innerText || '').trim().toLowerCase();
+      const aria = (b.getAttribute('aria-label') || '').trim().toLowerCase();
+      return text === 'push' || text === 'commit' || aria === 'push' || aria === 'commit';
     });
 
+    if (!vcsBtn) {
+      return {
+        available: false,
+        commit: { available: false, label: 'Commit', disabled: true, run: null },
+        push: { available: false, label: 'Push', disabled: true, run: null }
+      };
+    }
+
     let mtFiber = null;
-    if (vcsBtn) {
-      const k = Object.keys(vcsBtn).find((k) => k.startsWith('__reactFiber$'));
-      if (k) {
-        let f = vcsBtn[k];
-        while (f) {
-          if (f.memoizedProps && (f.memoizedProps.actions || f.memoizedProps.onMainClick)) {
-            mtFiber = f;
-            break;
-          }
-          f = f.return;
+    const k = Object.keys(vcsBtn).find((k) => k.startsWith('__reactFiber$'));
+    if (k) {
+      let f = vcsBtn[k];
+      while (f) {
+        if (f.memoizedProps && (f.memoizedProps.actions || f.memoizedProps.onMainClick)) {
+          mtFiber = f;
+          break;
         }
+        f = f.return;
       }
     }
 
@@ -330,29 +340,83 @@ function Get-AntigravityComposerTopBarPayload {
       const mainDisabled = Boolean(props.disabled);
       const mainHandler = typeof props.onMainClick === 'function' ? props.onMainClick : null;
 
-      const other = (props.actions || [])[0];
-      const otherLabel = other ? (typeof other.label === 'string' ? other.label : String(other.label)).trim() : (mainLabel === 'Push' ? 'Commit' : 'Push');
+      const actions = Array.isArray(props.actions) ? props.actions : [];
+      const other = actions[0];
       const otherDisabled = other ? Boolean(other.disabled || props.disabled) : true;
       const otherHandler = other && typeof other.onSelect === 'function' ? other.onSelect : null;
 
       const isCommitMain = mainLabel.toLowerCase().includes('commit');
+      const isPushMain = mainLabel.toLowerCase().includes('push');
+      const hasOther = Boolean(other);
+
+      const runCommit = () => {
+        if (isCommitMain) {
+          if (vcsBtn && typeof vcsBtn.click === 'function') {
+            try { vcsBtn.click(); } catch (e) {}
+          }
+          if (typeof mainHandler === 'function') {
+            try { mainHandler(); } catch (e) {}
+          }
+        } else if (other && typeof other.onSelect === 'function') {
+          other.onSelect();
+        } else if (typeof otherHandler === 'function') {
+          otherHandler();
+        } else if (vcsBtn) {
+          vcsBtn.click();
+        }
+      };
+
+      const runPush = () => {
+        if (isPushMain) {
+          if (vcsBtn && typeof vcsBtn.click === 'function') {
+            try { vcsBtn.click(); } catch (e) {}
+          }
+          if (typeof mainHandler === 'function') {
+            try { mainHandler(); } catch (e) {}
+          }
+        } else if (other && typeof other.onSelect === 'function') {
+          other.onSelect();
+        } else if (typeof otherHandler === 'function') {
+          otherHandler();
+        } else if (vcsBtn) {
+          vcsBtn.click();
+        }
+      };
+
       return {
+        available: true,
         commit: {
+          available: isCommitMain || (hasOther && other.label && String(other.label).toLowerCase().includes('commit')),
           label: 'Commit',
           disabled: isCommitMain ? mainDisabled : otherDisabled,
-          run: isCommitMain ? mainHandler : otherHandler
+          run: runCommit
         },
         push: {
+          available: isPushMain || (hasOther && other.label && String(other.label).toLowerCase().includes('push')),
           label: 'Push',
-          disabled: isCommitMain ? otherDisabled : mainDisabled,
-          run: isCommitMain ? otherHandler : mainHandler
+          disabled: isPushMain ? mainDisabled : otherDisabled,
+          run: runPush
         }
       };
     }
 
+    const rawText = (vcsBtn.innerText || '').trim().toLowerCase();
+    const isCommit = rawText.includes('commit');
+    const isPush = rawText.includes('push');
     return {
-      commit: { label: 'Commit', disabled: false, run: null },
-      push: { label: 'Push', disabled: false, run: null }
+      available: true,
+      commit: {
+        available: isCommit,
+        label: 'Commit',
+        disabled: Boolean(vcsBtn.disabled),
+        run: () => { if (isCommit && vcsBtn && !vcsBtn.disabled) vcsBtn.click(); }
+      },
+      push: {
+        available: isPush,
+        label: 'Push',
+        disabled: Boolean(vcsBtn.disabled),
+        run: () => { if (isPush && vcsBtn && !vcsBtn.disabled) vcsBtn.click(); }
+      }
     };
   }
 
@@ -380,6 +444,7 @@ function Get-AntigravityComposerTopBarPayload {
 
   function triggerCommitAction() {
     const states = getGitActionStates();
+    if (!states.commit || !states.commit.available || states.commit.disabled) return;
     if (typeof states.commit.run === 'function') {
       try {
         states.commit.run();
@@ -389,11 +454,24 @@ function Get-AntigravityComposerTopBarPayload {
         console.warn('[Antigravity Plus] Native Commit execution error:', e);
       }
     }
+    const nativeCommitBtn = Array.from(document.querySelectorAll('button')).find((b) => {
+      if (b.closest('[' + TOP_BAR_ATTR + ']')) return false;
+      const text = (b.innerText || '').trim().toLowerCase();
+      return text === 'commit';
+    });
+    if (nativeCommitBtn && !nativeCommitBtn.disabled) {
+      try {
+        nativeCommitBtn.click();
+        console.log('[Antigravity Plus] Fallback native Commit button clicked');
+        return;
+      } catch (e) {}
+    }
     window.dispatchEvent(new CustomEvent('antigravity-plus-commit'));
   }
 
   function triggerPushAction() {
     const states = getGitActionStates();
+    if (!states.push || !states.push.available || states.push.disabled) return;
     if (typeof states.push.run === 'function') {
       try {
         states.push.run();
@@ -402,6 +480,18 @@ function Get-AntigravityComposerTopBarPayload {
       } catch (e) {
         console.warn('[Antigravity Plus] Native Push execution error:', e);
       }
+    }
+    const nativePushBtn = Array.from(document.querySelectorAll('button')).find((b) => {
+      if (b.closest('[' + TOP_BAR_ATTR + ']')) return false;
+      const text = (b.innerText || '').trim().toLowerCase();
+      return text === 'push';
+    });
+    if (nativePushBtn && !nativePushBtn.disabled) {
+      try {
+        nativePushBtn.click();
+        console.log('[Antigravity Plus] Fallback native Push button clicked');
+        return;
+      } catch (e) {}
     }
     window.dispatchEvent(new CustomEvent('antigravity-plus-push'));
   }
@@ -479,11 +569,11 @@ function Get-AntigravityComposerTopBarPayload {
       triggerNewChat();
     });
 
-    // 6. Commit Button (Right-aligned)
+    // 6. Commit Button
     const commit = document.createElement('button');
     commit.type = 'button';
     commit.setAttribute(COMMIT_BTN_ATTR, 'true');
-    commit.setAttribute('style', btnStyle + 'margin-inline-start:auto;');
+    commit.setAttribute('style', btnStyle);
     commit.setAttribute('aria-label', 'Commit');
     commit.title = 'Commit changes';
     commit.appendChild(createCommitIcon());
@@ -527,7 +617,13 @@ function Get-AntigravityComposerTopBarPayload {
       if (!push.disabled) triggerPushAction();
     });
 
-    bar.append(project, location, branch, processBadge, newChat, commit, push);
+    // 8. Git Actions Group (Right-aligned)
+    const gitGroup = document.createElement('div');
+    gitGroup.setAttribute(GIT_GROUP_ATTR, 'true');
+    gitGroup.setAttribute('style', 'display:inline-flex;align-items:center;gap:6px;margin-inline-start:auto;');
+    gitGroup.append(commit, push);
+
+    bar.append(project, location, branch, processBadge, newChat, gitGroup);
     syncGitActionButtons(bar);
     return bar;
   }
@@ -594,18 +690,36 @@ function Get-AntigravityComposerTopBarPayload {
 
   function syncGitActionButtons(bar) {
     if (!bar) return;
+    const gitGroup = bar.querySelector('[' + GIT_GROUP_ATTR + ']');
     const commitBtn = bar.querySelector('[' + COMMIT_BTN_ATTR + ']');
     const pushBtn = bar.querySelector('[' + PUSH_BTN_ATTR + ']');
     if (!commitBtn && !pushBtn) return;
 
     const gitStates = getGitActionStates();
     if (commitBtn) {
-      commitBtn.disabled = gitStates.commit.disabled;
-      commitBtn.title = gitStates.commit.disabled ? 'No changes to commit' : 'Commit changes';
+      if (gitStates.commit && gitStates.commit.available) {
+        commitBtn.style.display = 'inline-flex';
+        commitBtn.disabled = Boolean(gitStates.commit.disabled);
+        commitBtn.title = gitStates.commit.disabled ? 'No changes to commit' : 'Commit changes';
+      } else {
+        commitBtn.style.display = 'none';
+      }
     }
     if (pushBtn) {
-      pushBtn.disabled = gitStates.push.disabled;
-      pushBtn.title = gitStates.push.disabled ? 'No commits to push' : 'Push changes';
+      if (gitStates.push && gitStates.push.available) {
+        pushBtn.style.display = 'inline-flex';
+        pushBtn.disabled = Boolean(gitStates.push.disabled);
+        pushBtn.title = gitStates.push.disabled ? 'No commits to push' : 'Push changes';
+      } else {
+        pushBtn.style.display = 'none';
+      }
+    }
+    if (gitGroup) {
+      const anyGitVisible = Boolean(
+        (gitStates.commit && gitStates.commit.available) ||
+        (gitStates.push && gitStates.push.available)
+      );
+      gitGroup.style.display = anyGitVisible ? 'inline-flex' : 'none';
     }
   }
 
@@ -615,7 +729,7 @@ function Get-AntigravityComposerTopBarPayload {
     if (!anchor || !anchor.container) return;
 
     let existingBar = document.querySelector('[' + TOP_BAR_ATTR + ']');
-    if (existingBar && !existingBar.querySelector('[' + PUSH_BTN_ATTR + ']')) {
+    if (existingBar && (!existingBar.querySelector('[' + PUSH_BTN_ATTR + ']') || !existingBar.querySelector('[' + GIT_GROUP_ATTR + ']'))) {
       existingBar.remove();
       existingBar = null;
     }
