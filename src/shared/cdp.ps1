@@ -9,16 +9,15 @@ function Get-AntigravityDevToolsTargets {
     while ([DateTime]::UtcNow -lt $deadline) {
         try {
             $raw = Invoke-RestMethod -Uri $url -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
-            if ($raw) {
-                $list = [System.Collections.Generic.List[object]]::new()
-                foreach ($item in $raw) {
-                    if ($item -and $item.id) {
-                        $list.Add($item)
-                    }
+            $targetList = if ($raw -is [array]) { $raw } elseif ($raw.value -is [array]) { $raw.value } else { @($raw) }
+            $list = [System.Collections.Generic.List[object]]::new()
+            foreach ($item in $targetList) {
+                if ($item -and $item.id) {
+                    $list.Add($item)
                 }
-                if ($list.Count -gt 0) {
-                    return $list.ToArray()
-                }
+            }
+            if ($list.Count -gt 0) {
+                return $list.ToArray()
             }
         } catch {
             Start-Sleep -Milliseconds 250
@@ -64,15 +63,14 @@ function Invoke-CdpWebSocket {
     param(
         [Parameter(Mandatory)][string]$WebSocketDebuggerUrl,
         [Parameter(Mandatory)]$Command,
-        [int]$TimeoutSeconds = 15
+        [int]$TimeoutSeconds = 10
     )
 
     $cleanWsUrl = if ($WebSocketDebuggerUrl -is [array]) { [string]$WebSocketDebuggerUrl[0] } else { [string]$WebSocketDebuggerUrl }
     $client = [System.Net.WebSockets.ClientWebSocket]::new()
-    $cts = [System.Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds($TimeoutSeconds))
 
     try {
-        $client.ConnectAsync([Uri]$cleanWsUrl, $cts.Token).GetAwaiter().GetResult() | Out-Null
+        $client.ConnectAsync([Uri]$cleanWsUrl, [System.Threading.CancellationToken]::None).GetAwaiter().GetResult() | Out-Null
 
         $json = if ($Command -is [string]) { $Command } else { $Command | ConvertTo-Json -Depth 20 -Compress }
         $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
@@ -80,35 +78,37 @@ function Invoke-CdpWebSocket {
             [ArraySegment[byte]]::new($bytes),
             [System.Net.WebSockets.WebSocketMessageType]::Text,
             $true,
-            $cts.Token
+            [System.Threading.CancellationToken]::None
         ).GetAwaiter().GetResult() | Out-Null
 
         $buffer = New-Object byte[] 65536
         $segment = [ArraySegment[byte]]::new($buffer)
         $expectedId = if ($Command -is [hashtable] -and $Command.ContainsKey('id')) { $Command['id'] } elseif ($Command.id) { $Command.id } else { $null }
 
-        while ($client.State -eq [System.Net.WebSockets.WebSocketState]::Open -and -not $cts.IsCancellationRequested) {
-            $message = New-Object System.Collections.Generic.List[byte]
-            $result = $client.ReceiveAsync($segment, $cts.Token).GetAwaiter().GetResult()
-            if ($result.Count -gt 0) {
-                $message.AddRange([byte[]]$buffer[0..($result.Count - 1)])
-            }
-
-            while (-not $result.EndOfMessage) {
-                $result = $client.ReceiveAsync($segment, $cts.Token).GetAwaiter().GetResult()
+        $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+        while ($client.State -eq [System.Net.WebSockets.WebSocketState]::Open -and [DateTime]::UtcNow -lt $deadline) {
+            $ms = [System.IO.MemoryStream]::new()
+            do {
+                $result = $client.ReceiveAsync($segment, [System.Threading.CancellationToken]::None).GetAwaiter().GetResult()
                 if ($result.Count -gt 0) {
-                    $message.AddRange([byte[]]$buffer[0..($result.Count - 1)])
+                    $ms.Write($buffer, 0, $result.Count)
                 }
+            } while (-not $result.EndOfMessage -and $client.State -eq [System.Net.WebSockets.WebSocketState]::Open)
+
+            if ($ms.Length -eq 0) {
+                continue
             }
 
-            $text = [System.Text.Encoding]::UTF8.GetString($message.ToArray())
+            $respBytes = $ms.ToArray()
+            $ms.Dispose()
+            $text = [System.Text.Encoding]::UTF8.GetString($respBytes)
             if ([string]::IsNullOrWhiteSpace($text)) {
                 continue
             }
 
             try {
                 $payload = $text | ConvertFrom-Json
-                if ($null -eq $expectedId -or $payload.id -eq $expectedId) {
+                if ($null -eq $expectedId -or [string]$payload.id -eq [string]$expectedId) {
                     return $payload
                 }
             } catch {
@@ -127,7 +127,6 @@ function Invoke-CdpWebSocket {
             } catch {}
         }
         $client.Dispose()
-        $cts.Dispose()
     }
 }
 
@@ -141,7 +140,6 @@ function Invoke-CdpEvaluate {
 
     $cmd = New-CdpCommand -Id $CommandId -Method 'Runtime.evaluate' -Params @{
         expression = $Expression
-        awaitPromise = $true
         returnByValue = $true
     }
     return Invoke-CdpWebSocket -WebSocketDebuggerUrl $WebSocketDebuggerUrl -Command $cmd -TimeoutSeconds $TimeoutSeconds

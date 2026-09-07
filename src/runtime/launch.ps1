@@ -1,3 +1,259 @@
+if (-not ('AntigravityNativeWindows' -as [type])) {
+    $nativeCode = @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class AntigravityNativeWindows {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern IntPtr OpenInputDesktop(uint dwFlags, bool fInherit, uint dwDesiredAccess);
+    [DllImport("user32.dll")] public static extern bool CloseDesktop(IntPtr hDesktop);
+    [DllImport("user32.dll")] public static extern bool EnumDesktopWindows(IntPtr hDesktop, EnumWindowsProc lpfn, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll", EntryPoint = "GetClassNameW", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+    [DllImport("user32.dll", EntryPoint = "GetWindowTextW", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+
+    public const int SW_HIDE = 0;
+    public const int SW_SHOWNORMAL = 1;
+    public const int SW_SHOW = 5;
+    public const int SW_RESTORE = 9;
+
+    public static List<IntPtr> GetProcessWindowHandles(int[] processIds) {
+        var set = new HashSet<int>(processIds);
+        var handles = new List<IntPtr>();
+        var seen = new HashSet<IntPtr>();
+
+        EnumWindowsProc proc = (hWnd, lParam) => {
+            if (seen.Contains(hWnd)) return true;
+            seen.Add(hWnd);
+
+            uint pid;
+            GetWindowThreadProcessId(hWnd, out pid);
+            if (set.Contains((int)pid)) {
+                handles.Add(hWnd);
+            }
+            return true;
+        };
+
+        IntPtr hDesk = OpenInputDesktop(0, false, 0x0100);
+        if (hDesk != IntPtr.Zero) {
+            EnumDesktopWindows(hDesk, proc, IntPtr.Zero);
+            CloseDesktop(hDesk);
+        }
+        EnumWindows(proc, IntPtr.Zero);
+
+        return handles;
+    }
+
+    public static int HideProcessWindows(int[] processIds) {
+        if (processIds == null || processIds.Length == 0) return 0;
+        var handles = GetProcessWindowHandles(processIds);
+        int count = 0;
+        foreach (var hWnd in handles) {
+            if (IsWindowVisible(hWnd)) {
+                ShowWindow(hWnd, SW_HIDE);
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public static int ShowProcessWindows(int[] processIds, bool foreground = true) {
+        if (processIds == null || processIds.Length == 0) return 0;
+        var handles = GetProcessWindowHandles(processIds);
+        int count = 0;
+        foreach (var hWnd in handles) {
+            var sbClass = new StringBuilder(256);
+            GetClassName(hWnd, sbClass, 256);
+            string cls = sbClass.ToString();
+            if (cls == "Chrome_WidgetWin_1") {
+                ShowWindow(hWnd, SW_RESTORE);
+                ShowWindow(hWnd, SW_SHOW);
+                if (foreground) {
+                    SetForegroundWindow(hWnd);
+                    BringWindowToTop(hWnd);
+                }
+                count++;
+            }
+        }
+        return count;
+    }
+}
+'@
+    Add-Type -TypeDefinition $nativeCode -IgnoreWarnings
+}
+
+function Get-AntigravityMatchingProcessIds {
+    param(
+        [int]$Port = 0,
+        [AllowEmptyString()][string]$LauncherKey = ''
+    )
+
+    $procs = Get-AntigravityProcesses
+    $matched = [System.Collections.Generic.List[int]]::new()
+
+    foreach ($p in $procs) {
+        $cmd = [string]$p.CommandLine
+        $isMatch = $false
+
+        if ($Port -gt 0 -and $cmd -match [regex]::Escape("--remote-debugging-port=$Port")) {
+            $isMatch = $true
+        }
+        if (-not $isMatch -and $LauncherKey -and ($cmd -match "(^|[\s""'=])$([regex]::Escape($LauncherKey))($|[\s""'])")) {
+            $isMatch = $true
+        }
+
+        if ($isMatch) {
+            $pidVal = if ($p.ProcessId) { [int]$p.ProcessId } elseif ($p.Id) { [int]$p.Id } else { 0 }
+            if ($pidVal -gt 0 -and -not $matched.Contains($pidVal)) {
+                $matched.Add($pidVal)
+            }
+        }
+    }
+
+    if ($matched.Count -gt 0) {
+        $parentSet = [System.Collections.Generic.HashSet[int]]::new($matched)
+        foreach ($p in $procs) {
+            $pidVal = if ($p.ProcessId) { [int]$p.ProcessId } elseif ($p.Id) { [int]$p.Id } else { 0 }
+            $parentVal = if ($p.ParentProcessId) { [int]$p.ParentProcessId } else { 0 }
+            if ($parentVal -gt 0 -and $parentSet.Contains($parentVal)) {
+                if (-not $matched.Contains($pidVal)) {
+                    $matched.Add($pidVal)
+                }
+            }
+        }
+    }
+
+    return @($matched)
+}
+
+function Stop-AntigravityMatchingProcesses {
+    param(
+        [int]$Port = 0,
+        [AllowEmptyString()][string]$LauncherKey = '',
+        [int[]]$KnownProcessIds = @()
+    )
+
+    # Closing an Antigravity window does not necessarily terminate Electron:
+    # runInBackground keeps the browser, utility processes, and language server
+    # alive. Once the DevTools monitor knows the window is gone, terminate only
+    # this launcher instance and all of its descendants.
+    $allProcesses = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    if ($allProcesses.Count -eq 0) { return }
+
+    $matchedRootIds = @(
+        @(Get-AntigravityMatchingProcessIds -Port $Port -LauncherKey $LauncherKey) +
+        @($KnownProcessIds | ForEach-Object { try { [int]$_ } catch { 0 } })
+    ) | Where-Object { $_ -gt 0 } | Select-Object -Unique
+    if ($matchedRootIds.Count -eq 0) { return }
+
+    $selectedIds = @{}
+    foreach ($processId in $matchedRootIds) {
+        if ([int]$processId -gt 0) {
+            $selectedIds[[string][int]$processId] = $true
+        }
+    }
+
+    # Walk the complete process tree so that language_server.exe and any
+    # non-Antigravity helpers launched by this Electron instance are included.
+    do {
+        $added = $false
+        foreach ($process in $allProcesses) {
+            $processId = try { [int]$process.ProcessId } catch { 0 }
+            $parentId = try { [int]$process.ParentProcessId } catch { 0 }
+            if ($processId -gt 0 -and $parentId -gt 0 -and
+                -not $selectedIds.ContainsKey([string]$processId) -and
+                $selectedIds.ContainsKey([string]$parentId)) {
+                $selectedIds[[string]$processId] = $true
+                $added = $true
+            }
+        }
+    } while ($added)
+
+    $parentById = @{}
+    foreach ($process in $allProcesses) {
+        $processId = try { [int]$process.ProcessId } catch { 0 }
+        if ($processId -gt 0) {
+            $parentById[[string]$processId] = try { [int]$process.ParentProcessId } catch { 0 }
+        }
+    }
+
+    $selectedProcesses = @($allProcesses | Where-Object {
+        $selectedIds.ContainsKey([string][int]$_.ProcessId)
+    })
+    $orderedProcesses = @(
+        foreach ($process in $selectedProcesses) {
+            $depth = 0
+            $cursor = [int]$process.ProcessId
+            while ($parentById.ContainsKey([string]$cursor) -and $depth -lt 128) {
+                $parentId = [int]$parentById[[string]$cursor]
+                if ($parentId -le 0 -or $parentId -eq $cursor) { break }
+                $depth++
+                $cursor = $parentId
+            }
+            [pscustomobject]@{ Process = $process; Depth = $depth }
+        }
+    ) | Sort-Object Depth -Descending
+
+    foreach ($entry in $orderedProcesses) {
+        try {
+            Stop-Process -Id ([int]$entry.Process.ProcessId) -Force -ErrorAction SilentlyContinue
+        } catch { }
+    }
+}
+
+function Hide-AntigravityWindows {
+    param(
+        [int]$Port = 0,
+        [AllowEmptyString()][string]$LauncherKey = ''
+    )
+    $pids = Get-AntigravityMatchingProcessIds -Port $Port -LauncherKey $LauncherKey
+    if ($pids.Count -gt 0) {
+        [AntigravityNativeWindows]::HideProcessWindows($pids) | Out-Null
+    }
+}
+
+function Show-AntigravityWindows {
+    param(
+        [int]$Port = 0,
+        [AllowEmptyString()][string]$LauncherKey = '',
+        [switch]$Foreground
+    )
+    $pids = Get-AntigravityMatchingProcessIds -Port $Port -LauncherKey $LauncherKey
+    if ($pids.Count -gt 0) {
+        [AntigravityNativeWindows]::ShowProcessWindows($pids, [bool]$Foreground) | Out-Null
+    }
+}
+
+function Test-AntigravityPlusInjected {
+    param(
+        [Parameter(Mandatory)][int]$Port,
+        [int]$TimeoutSeconds = 2
+    )
+
+    try {
+        $page = Get-AntigravityActivePageTarget -Port $Port -TimeoutSeconds $TimeoutSeconds
+        if (-not $page -or -not $page.webSocketDebuggerUrl) {
+            return $false
+        }
+        $wsUrl = [string]$page.webSocketDebuggerUrl
+        $expr = "Boolean(window.__ANTIGRAVITY_PLUS_RTL_INSTALLED && window.__GEMINI_PLUS_SIDEBAR_ENHANCEMENTS && window.__GEMINI_PLUS_INJECTION_READY)"
+        $res = Invoke-CdpEvaluate -WebSocketDebuggerUrl $wsUrl -Expression $expr -TimeoutSeconds $TimeoutSeconds
+        if ($res -and $res.result -and $res.result.result -and [bool]$res.result.result.value) {
+            return $true
+        }
+    } catch {}
+    return $false
+}
+
 function Start-AntigravityWithDebug {
     param(
         [Parameter(Mandatory)][string]$ExePath,
@@ -153,6 +409,7 @@ function Invoke-AntigravityPlusTargetInjection {
 function Invoke-AntigravityPlusInjectionOnPort {
     param(
         [Parameter(Mandatory)][int]$Port,
+        [AllowEmptyString()][string]$LauncherKey = '',
         [int]$TimeoutSeconds = 30
     )
 
@@ -161,6 +418,10 @@ function Invoke-AntigravityPlusInjectionOnPort {
     $injectedCount = 0
 
     while ([DateTime]::UtcNow -lt $deadline) {
+        if ($LauncherKey) {
+            Hide-AntigravityWindows -Port $Port -LauncherKey $LauncherKey
+        }
+
         $targets = @(Get-AntigravityDevToolsTargets -Port $Port -TimeoutSeconds 1)
         $pageTargets = @($targets | Where-Object {
             $_.type -eq 'page' -and
@@ -176,14 +437,20 @@ function Invoke-AntigravityPlusInjectionOnPort {
                 }
             }
 
-            $realTargets = @($pageTargets | Where-Object { $_.url -notlike 'data:text/html*' })
-            if ($realTargets.Count -gt 0) {
+            if (Test-AntigravityPlusInjected -Port $Port -TimeoutSeconds 1) {
+                Start-Sleep -Milliseconds 150
+                if ($LauncherKey) {
+                    Show-AntigravityWindows -Port $Port -LauncherKey $LauncherKey -Foreground
+                }
                 return $true
             }
         }
         Start-Sleep -Milliseconds 60
     }
 
+    if ($LauncherKey) {
+        Show-AntigravityWindows -Port $Port -LauncherKey $LauncherKey -Foreground
+    }
     return ($injectedCount -gt 0)
 }
 
@@ -191,7 +458,7 @@ function Show-AntigravityLaunchSplash {
     param(
         [AllowEmptyString()][string]$LauncherKey,
         [int]$PreferredPort = 0,
-        [int]$TimeoutSeconds = 20
+        [int]$TimeoutSeconds = 25
     )
 
     try {
@@ -274,7 +541,7 @@ function Show-AntigravityLaunchSplash {
     $window.Show()
 
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
-    $minDisplayUntil = [DateTime]::UtcNow.AddMilliseconds(1200)
+    $minDisplayUntil = [DateTime]::UtcNow.AddMilliseconds(800)
 
     while ([DateTime]::UtcNow -lt $deadline -and $window.IsVisible) {
         [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
@@ -282,28 +549,33 @@ function Show-AntigravityLaunchSplash {
             [action]{}
         )
 
-        if ([DateTime]::UtcNow -ge $minDisplayUntil -and $PreferredPort -gt 0) {
-            try {
-                $raw = @(Invoke-RestMethod -Uri "http://127.0.0.1:$PreferredPort/json/list" -TimeoutSec 1 -ErrorAction SilentlyContinue)
-                $realPage = $raw | Where-Object { $_.type -eq 'page' -and $_.url -notlike 'data:text/html*' }
-                if ($realPage) {
-                    Start-Sleep -Milliseconds 250
-                    break
-                }
-            } catch {}
+        if ($PreferredPort -gt 0 -or $LauncherKey) {
+            Hide-AntigravityWindows -Port $PreferredPort -LauncherKey $LauncherKey
         }
 
-        Start-Sleep -Milliseconds 60
+        if ([DateTime]::UtcNow -ge $minDisplayUntil -and $PreferredPort -gt 0) {
+            if (Test-AntigravityPlusInjected -Port $PreferredPort -TimeoutSeconds 1) {
+                Show-AntigravityWindows -Port $PreferredPort -LauncherKey $LauncherKey -Foreground
+                Start-Sleep -Milliseconds 150
+                break
+            }
+        }
+
+        Start-Sleep -Milliseconds 50
     }
 
     try { $window.Close() } catch {}
+    if ($PreferredPort -gt 0 -or $LauncherKey) {
+        Show-AntigravityWindows -Port $PreferredPort -LauncherKey $LauncherKey -Foreground
+    }
     return $true
 }
 
 function Start-AntigravityPortMonitor {
     param(
         [Parameter(Mandatory)][int]$Port,
-        [AllowEmptyString()][string]$LauncherKey
+        [AllowEmptyString()][string]$LauncherKey,
+        [int[]]$KnownProcessIds = @()
     )
 
     $payload = Get-AntigravityPayloadBundle
@@ -374,6 +646,10 @@ function Start-AntigravityPortMonitor {
 
         Start-Sleep -Milliseconds $pollInterval
     }
+
+    # The window is gone, but Antigravity may remain alive because its
+    # run-in-background setting is enabled. Clean up this exact instance.
+    Stop-AntigravityMatchingProcesses -Port $Port -LauncherKey $LauncherKey -KnownProcessIds $KnownProcessIds
 }
 
 function Launch-AntigravityPlus {
@@ -422,7 +698,10 @@ function Launch-AntigravityPlus {
     Start-AntigravityWithDebug -ExePath $installInfo.ExePath -Port $port -UserDataDir $userDataDir
 
     Write-Info "Waiting for Antigravity window to become ready..."
-    $injected = Invoke-AntigravityPlusInjectionOnPort -Port $port -TimeoutSeconds 30
+    $injected = Invoke-AntigravityPlusInjectionOnPort -Port $port -LauncherKey $LauncherKey -TimeoutSeconds 30
+
+    # Ensure windows are visible and foregrounded
+    Show-AntigravityWindows -Port $port -LauncherKey $LauncherKey -Foreground
 
     if ($injected) {
         # Trigger visual toast in the new window
@@ -442,6 +721,7 @@ function Launch-AntigravityPlus {
 
     # Start persistent port monitor
     if (-not $NoMonitor) {
-        Start-AntigravityPortMonitor -Port $port -LauncherKey $LauncherKey
+        $knownProcessIds = @(Get-AntigravityMatchingProcessIds -Port $port -LauncherKey $LauncherKey)
+        Start-AntigravityPortMonitor -Port $port -LauncherKey $LauncherKey -KnownProcessIds $knownProcessIds
     }
 }

@@ -150,6 +150,8 @@ $files = @(
     'src/antigravity/rtl-payload.ps1',
     'src/antigravity/ui-enhancements.ps1',
     'src/antigravity/context-badge.ps1',
+    'src/antigravity/sidebar-enhancements.ps1',
+    'src/antigravity/composer-top-bar.ps1',
     'src/antigravity/payload-bundle.ps1',
     'src/runtime/files.ps1',
     'src/runtime/state.ps1',

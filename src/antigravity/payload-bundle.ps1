@@ -3,6 +3,8 @@ function Get-AntigravityPayloadBundle {
     $rtl = Get-AntigravityRtlPayload
     $ui = Get-AntigravityUiEnhancementsPayload
     $badge = Get-AntigravityContextBadgePayload
+    $sidebar = Get-AntigravitySidebarEnhancementsPayload
+    $composerTopBar = Get-AntigravityComposerTopBarPayload
 
     return @"
 // Antigravity Plus Runtime Bundle
@@ -27,6 +29,19 @@ function Get-AntigravityPayloadBundle {
     } catch(e) {
         console.error('[Antigravity Plus] Badge payload error:', e);
     }
+    try {
+        $sidebar
+    } catch(e) {
+        console.error('[Antigravity Plus] Sidebar payload error:', e);
+    }
+    try {
+        $composerTopBar
+    } catch(e) {
+        console.error('[Antigravity Plus] Composer top bar payload error:', e);
+    }
+    try {
+        window.__GEMINI_PLUS_INJECTION_READY = true;
+    } catch(e) {}
 })();
 "@
 }

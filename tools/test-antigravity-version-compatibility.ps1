@@ -50,6 +50,8 @@ Assert-Check "PowerShell Syntax Validation" {
 . (Join-Path $rootDir 'src\antigravity\rtl-payload.ps1')
 . (Join-Path $rootDir 'src\antigravity\ui-enhancements.ps1')
 . (Join-Path $rootDir 'src\antigravity\context-badge.ps1')
+. (Join-Path $rootDir 'src\antigravity\sidebar-enhancements.ps1')
+. (Join-Path $rootDir 'src\antigravity\composer-top-bar.ps1')
 . (Join-Path $rootDir 'src\antigravity\payload-bundle.ps1')
 . (Join-Path $rootDir 'src\runtime\files.ps1')
 . (Join-Path $rootDir 'src\runtime\state.ps1')
@@ -91,18 +93,26 @@ Assert-Check "Antigravity Installation Detection" {
 # Live tests (skip if -OfflineOnly)
 if (-not $OfflineOnly) {
     Assert-Check "Active DevTools Connection & Live Injected State" {
-        $port = Get-AntigravityActiveDevToolsPort
-        if ($port -le 0) {
+        $ports = @(Get-AntigravityActiveDevToolsPorts)
+        if ($ports.Count -eq 0) {
             throw "No running Antigravity instance detected with DevTools enabled."
         }
-        $page = Get-AntigravityActivePageTarget -Port $port -TimeoutSeconds 5
-        if (-not $page) {
-            throw "Could not find active page target on port $port."
+        $tested = $false
+        foreach ($port in $ports) {
+            $page = Get-AntigravityActivePageTarget -Port $port -TimeoutSeconds 5
+            if ($page -and $page.webSocketDebuggerUrl) {
+                try {
+                    $wsUrl = $page.webSocketDebuggerUrl
+                    $res = Invoke-CdpEvaluate -WebSocketDebuggerUrl $wsUrl -Expression "({ title: document.title, hasRtlStyle: !!document.getElementById('antigravity-plus-rtl-style'), hasTopBar: !!document.querySelector('[data-gemini-plus-composer-top-bar]'), hasBadge: !!(document.querySelector('[data-gemini-plus-top-badge]') || document.querySelector('[data-antigravity-plus-context-badge]')) })" -TimeoutSeconds 5
+                    if ($res -and $res.result -and $res.result.result) {
+                        $tested = $true
+                        break
+                    }
+                } catch {}
+            }
         }
-        $wsUrl = $page.webSocketDebuggerUrl
-        $res = Invoke-CdpEvaluate -WebSocketDebuggerUrl $wsUrl -Expression "({ title: document.title, hasRtlStyle: !!document.getElementById('antigravity-plus-rtl-style'), hasBadge: !!(document.querySelector('[data-gemini-plus-top-badge]') || document.querySelector('[data-antigravity-plus-context-badge]')) })"
-        if (-not $res -or -not $res.result) {
-            throw "DevTools evaluation failed."
+        if (-not $tested) {
+            throw "DevTools evaluation failed across all active ports."
         }
     }
 }
