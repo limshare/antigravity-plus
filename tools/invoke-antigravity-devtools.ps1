@@ -21,13 +21,13 @@ if ($Port -le 0) {
     exit 1
 }
 
-$page = Get-AntigravityActivePageTarget -Port $Port -TimeoutSeconds $TimeoutSeconds
-if (-not $page) {
+$page = @(Get-AntigravityActivePageTarget -Port $Port -TimeoutSeconds $TimeoutSeconds) | Select-Object -First 1
+if (-not $page -or -not $page.webSocketDebuggerUrl) {
     Write-Err "No active page target found on port $Port."
     exit 1
 }
 
-$wsUrl = $page.webSocketDebuggerUrl
+$wsUrl = [string]$page.webSocketDebuggerUrl
 $res = Invoke-CdpEvaluate -WebSocketDebuggerUrl $wsUrl -Expression $Expression -TimeoutSeconds $TimeoutSeconds
 
 if ($res -and $res.result -and $res.result.result) {

@@ -14,8 +14,9 @@ function Install-AntigravityPlus {
     $runtimeRoot = Install-AntigravityPlusRuntimeFiles -SourceRoot $sourceRoot
     $runtimePatchScript = Join-Path $runtimeRoot 'patch.ps1'
 
-    Write-Info "Creating launcher batch script..."
+    Write-Info "Creating launcher scripts..."
     $launcherBatch = Install-AntigravityPlusLauncherBatch -PatchScriptPath $runtimePatchScript
+    $launcherScript = Install-AntigravityPlusLauncherScript -PatchScriptPath $runtimePatchScript
 
     Write-Info "Creating Antigravity Plus shortcuts..."
     $ownedShortcuts = @(Install-AntigravityPlusShortcuts -PatchScriptPath $runtimePatchScript -ExeIconPath $installInfo.ExePath)
@@ -30,16 +31,7 @@ function Install-AntigravityPlus {
         Write-Host "    $sc" -ForegroundColor Cyan
     }
 
-    # If Antigravity is currently running, inject right now!
-    if ($activePort -gt 0) {
-        Write-Info "Detected running Antigravity instance on port $activePort. Performing immediate live injection..."
-        $injected = Invoke-AntigravityPlusInjectionOnPort -Port $activePort -TimeoutSeconds 10
-        if ($injected) {
-            Write-Success "Enhancements live-injected into running Antigravity window!"
-        }
-    } else {
-        Write-Info "Launch Antigravity using your new 'Antigravity Plus' shortcut to activate enhancements."
-    }
+    Write-Info "Antigravity Plus runtime synchronized and launcher shortcuts ready."
 }
 
 function Restore-AntigravityPlus {
@@ -65,16 +57,29 @@ function Restore-AntigravityPlus {
 }
 
 function Invoke-AntigravityPlusLiveInject {
-    $activePort = Get-AntigravityActiveDevToolsPort
-    if ($activePort -le 0) {
+    $activePorts = @(Get-AntigravityActiveDevToolsPorts)
+    if ($activePorts.Count -eq 0) {
+        $fallbackPort = Get-AntigravityActiveDevToolsPort
+        if ($fallbackPort -gt 0) {
+            $activePorts = @($fallbackPort)
+        }
+    }
+
+    if ($activePorts.Count -eq 0) {
         throw "No active Antigravity DevTools session was found. Make sure Antigravity is running."
     }
 
-    Write-Info "Connecting to Antigravity on DevTools port $activePort..."
-    $success = Invoke-AntigravityPlusInjectionOnPort -Port $activePort -TimeoutSeconds 10
-    if ($success) {
-        Write-Success "Antigravity Plus enhancements successfully injected into running window!"
-    } else {
+    $totalSuccess = 0
+    foreach ($port in $activePorts) {
+        Write-Info "Connecting to Antigravity on DevTools port $port..."
+        $success = Invoke-AntigravityPlusInjectionOnPort -Port $port -TimeoutSeconds 10
+        if ($success) {
+            $totalSuccess++
+            Write-Success "Antigravity Plus enhancements successfully injected into window on port $port!"
+        }
+    }
+
+    if ($totalSuccess -eq 0) {
         Write-Err "Could not inject into running Antigravity targets."
     }
 }

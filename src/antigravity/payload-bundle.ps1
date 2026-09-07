@@ -2,6 +2,7 @@ function Get-AntigravityPayloadBundle {
     $shared = Get-AntigravityRtlSharedHelpers
     $rtl = Get-AntigravityRtlPayload
     $ui = Get-AntigravityUiEnhancementsPayload
+    $badge = Get-AntigravityContextBadgePayload
 
     return @"
 // Antigravity Plus Runtime Bundle
@@ -20,6 +21,11 @@ function Get-AntigravityPayloadBundle {
         $ui
     } catch(e) {
         console.error('[Antigravity Plus] UI payload error:', e);
+    }
+    try {
+        $badge
+    } catch(e) {
+        console.error('[Antigravity Plus] Badge payload error:', e);
     }
 })();
 "@

@@ -3,10 +3,12 @@ param(
     [switch]$Install,
     [switch]$Restore,
     [switch]$Launch,
+    [switch]$ShowLaunchSplash,
     [switch]$LiveInject,
-    [switch]$NewWindow,
+    [AllowEmptyString()][string]$LauncherKey,
     [int]$Port = 0,
-    [switch]$Silent
+    [switch]$Silent,
+    [switch]$SkipMain
 )
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -21,6 +23,7 @@ $modules = @(
     'src\antigravity\rtl-shared.ps1',
     'src\antigravity\rtl-payload.ps1',
     'src\antigravity\ui-enhancements.ps1',
+    'src\antigravity\context-badge.ps1',
     'src\antigravity\payload-bundle.ps1',
     'src\runtime\files.ps1',
     'src\runtime\state.ps1',
@@ -38,6 +41,15 @@ foreach ($mod in $modules) {
     . $modPath
 }
 
+if ($ShowLaunchSplash) {
+    Show-AntigravityLaunchSplash -LauncherKey $LauncherKey -PreferredPort $Port
+    exit 0
+}
+
+if ($SkipMain) {
+    return
+}
+
 # Process command-line flags
 if ($Install) {
     Install-AntigravityPlus
@@ -50,7 +62,7 @@ if ($Restore) {
 }
 
 if ($Launch) {
-    Launch-AntigravityPlus -PreferredPort $Port -NewWindow:$NewWindow
+    Launch-AntigravityPlus -PreferredPort $Port -LauncherKey $LauncherKey
     exit 0
 }
 

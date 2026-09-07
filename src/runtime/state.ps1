@@ -41,3 +41,18 @@ function New-AntigravityPlusState {
         UpdatedAt = [DateTimeOffset]::Now.ToString('o')
     }
 }
+
+function Get-AntigravityPlusUserDataDirectory {
+    param([AllowEmptyString()][string]$LauncherKey)
+
+    $profileRoot = Join-Path $env:LOCALAPPDATA 'AntigravityPlus\profile'
+    $profilePath = if ([string]::IsNullOrWhiteSpace($LauncherKey)) {
+        $profileRoot
+    } else {
+        Join-Path $profileRoot $LauncherKey
+    }
+    if (-not (Test-Path -LiteralPath $profilePath)) {
+        New-Item -ItemType Directory -Force -Path $profilePath | Out-Null
+    }
+    return $profilePath
+}

@@ -89,31 +89,64 @@ function Get-AntigravityBrowserProcess {
     return ($procs | Select-Object -First 1)
 }
 
-function Get-AntigravityActiveDevToolsPort {
-    $activePortFile = Join-Path $env:APPDATA 'Antigravity\DevToolsActivePort'
-    if (Test-Path -LiteralPath $activePortFile) {
-        try {
-            $lines = Get-Content -LiteralPath $activePortFile -ErrorAction Stop
-            if ($lines.Count -ge 1) {
-                $port = 0
-                if ([int]::TryParse($lines[0].Trim(), [ref]$port) -and $port -gt 0) {
-                    return $port
-                }
-            }
-        } catch {}
-    }
+function Test-AntigravityPortResponding {
+    param(
+        [Parameter(Mandatory)][int]$Port,
+        [int]$TimeoutMs = 400
+    )
+    try {
+        $req = [System.Net.WebRequest]::Create("http://127.0.0.1:$Port/json/list")
+        $req.Timeout = $TimeoutMs
+        $resp = $req.GetResponse()
+        $stream = $resp.GetResponseStream()
+        $reader = [System.IO.StreamReader]::new($stream)
+        $json = $reader.ReadToEnd()
+        $reader.Close()
+        $resp.Close()
 
-    # Check running processes command line for --remote-debugging-port
+        if ($json -and $json -match '"type":\s*"page"') {
+            return $true
+        }
+        return $false
+    } catch {
+        return $false
+    }
+}
+
+function Get-AntigravityActiveDevToolsPorts {
+    $ports = [System.Collections.Generic.List[int]]::new()
     $procs = Get-AntigravityProcesses
     foreach ($p in $procs) {
         $cmd = [string]$p.CommandLine
         $match = [regex]::Match($cmd, '--remote-debugging-port=(\d+)')
         if ($match.Success) {
             $val = [int]$match.Groups[1].Value
-            if ($val -gt 0) {
-                return $val
+            if ($val -gt 0 -and -not $ports.Contains($val) -and (Test-AntigravityPortResponding -Port $val)) {
+                $ports.Add($val)
             }
         }
+    }
+
+    $activePortFile = Join-Path $env:APPDATA 'Antigravity\DevToolsActivePort'
+    if (Test-Path -LiteralPath $activePortFile) {
+        try {
+            $lines = Get-Content -LiteralPath $activePortFile -ErrorAction Stop
+            if ($lines.Count -ge 1) {
+                $port = 0
+                if ([int]::TryParse($lines[0].Trim(), [ref]$port) -and $port -gt 0 -and -not $ports.Contains($port) -and (Test-AntigravityPortResponding -Port $port)) {
+                    $ports.Add($port)
+                }
+            }
+        } catch {}
+    }
+
+    return @($ports)
+}
+
+function Get-AntigravityActiveDevToolsPort {
+    $ports = @(Get-AntigravityActiveDevToolsPorts)
+    if ($ports.Count -gt 0) {
+        return $ports[0]
     }
     return 0
 }

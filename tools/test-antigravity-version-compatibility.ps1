@@ -49,6 +49,7 @@ Assert-Check "PowerShell Syntax Validation" {
 . (Join-Path $rootDir 'src\antigravity\rtl-shared.ps1')
 . (Join-Path $rootDir 'src\antigravity\rtl-payload.ps1')
 . (Join-Path $rootDir 'src\antigravity\ui-enhancements.ps1')
+. (Join-Path $rootDir 'src\antigravity\context-badge.ps1')
 . (Join-Path $rootDir 'src\antigravity\payload-bundle.ps1')
 . (Join-Path $rootDir 'src\runtime\files.ps1')
 . (Join-Path $rootDir 'src\runtime\state.ps1')
@@ -99,7 +100,7 @@ if (-not $OfflineOnly) {
             throw "Could not find active page target on port $port."
         }
         $wsUrl = $page.webSocketDebuggerUrl
-        $res = Invoke-CdpEvaluate -WebSocketDebuggerUrl $wsUrl -Expression "({ title: document.title, hasIndicator: !!document.getElementById('antigravity-plus-indicator'), hasRtlStyle: !!document.getElementById('antigravity-plus-rtl-style') })"
+        $res = Invoke-CdpEvaluate -WebSocketDebuggerUrl $wsUrl -Expression "({ title: document.title, hasRtlStyle: !!document.getElementById('antigravity-plus-rtl-style'), hasBadge: !!(document.querySelector('[data-gemini-plus-top-badge]') || document.querySelector('[data-antigravity-plus-context-badge]')) })"
         if (-not $res -or -not $res.result) {
             throw "DevTools evaluation failed."
         }

@@ -40,14 +40,17 @@ function Install-AntigravityPlusShortcuts {
     $startMenuDir = Join-Path ([Environment]::GetFolderPath('StartMenu')) 'Programs'
     $startMenuShortcut = Join-Path $startMenuDir 'Antigravity Plus.lnk'
 
-    $powerShellPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $args = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PatchScriptPath`" -Launch"
-    $workDir = Split-Path -Parent $PatchScriptPath
+    $wscriptPath = Join-Path $env:SystemRoot 'System32\wscript.exe'
+    $launcherVbs = Get-AntigravityPlusLauncherVbsPath
+    $launcherKey = "antigravity-plus"
+    $desktopArgs = "`"$launcherVbs`" `"$launcherKey`" desktop"
+    $startMenuArgs = "`"$launcherVbs`" `"$launcherKey`""
+    $workDir = Get-AntigravityPlusRoot
 
     $icon = if ($ExeIconPath -and (Test-Path -LiteralPath $ExeIconPath)) {
         $ExeIconPath
     } else {
-        $powerShellPath
+        $wscriptPath
     }
 
     $created = @()
@@ -55,8 +58,8 @@ function Install-AntigravityPlusShortcuts {
     try {
         Create-AntigravityShortcut `
             -ShortcutPath $desktopShortcut `
-            -TargetPath $powerShellPath `
-            -Arguments $args `
+            -TargetPath $wscriptPath `
+            -Arguments $desktopArgs `
             -WorkingDirectory $workDir `
             -IconLocation "$icon,0"
         $created += $desktopShortcut
@@ -67,8 +70,8 @@ function Install-AntigravityPlusShortcuts {
     try {
         Create-AntigravityShortcut `
             -ShortcutPath $startMenuShortcut `
-            -TargetPath $powerShellPath `
-            -Arguments $args `
+            -TargetPath $wscriptPath `
+            -Arguments $startMenuArgs `
             -WorkingDirectory $workDir `
             -IconLocation "$icon,0"
         $created += $startMenuShortcut
