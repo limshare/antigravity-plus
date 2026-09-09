@@ -59,7 +59,7 @@ async sendNotification(a) {
 ## Permanent Solution (No Loop / No Monitoring)
 
 The flag is persisted in Antigravity's native storage file on disk:
-- **File**: `C:\Users\Noam\AppData\Roaming\Antigravity\app_storage.json`
+- **File**: `%APPDATA%\Antigravity\app_storage.json`
 - **Key**: `"didAskForNotificationPermission": "true"`
 
 ### How to Ensure It Stays Disabled:
