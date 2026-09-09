@@ -75,11 +75,12 @@ If preferredPort = 0 Then
     Randomize
     preferredPort = Int((45000 - 20000 + 1) * Rnd + 20000)
 End If
+guidStr = Mid(CreateObject("Scriptlet.TypeLib").Guid, 2, 36)
 If launcherKey <> "" Then
-    instanceKey = launcherKey & "-" & Replace(Replace(CreateObject("Scriptlet.TypeLib").Guid, "{", ""), "}", "")
+    instanceKey = launcherKey & "-" & guidStr
     shell.Environment("Process")("ANTIGRAVITY_PLUS_LAUNCHER_KEY") = instanceKey
 Else
-    instanceKey = Replace(Replace(CreateObject("Scriptlet.TypeLib").Guid, "{", ""), "}", "")
+    instanceKey = guidStr
     shell.Environment("Process")("ANTIGRAVITY_PLUS_LAUNCHER_KEY") = instanceKey
 End If
 If desktopLaunch Then

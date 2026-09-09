@@ -23,6 +23,7 @@ function Show-AntigravityPlusMenu {
         "Live Inject into Running Antigravity",
         "Launch Antigravity Plus",
         "Restore Antigravity Plus",
+        "Clean Orphaned Background Processes",
         "Exit"
     )
 
@@ -42,6 +43,10 @@ function Show-AntigravityPlusMenu {
             Restore-AntigravityPlus
         }
         5 {
+            $count = Clear-AntigravityOrphanedProcesses
+            Write-Success "Cleaned up $count orphaned background process(es)."
+        }
+        6 {
             Write-Host "Exiting." -ForegroundColor Gray
             return
         }

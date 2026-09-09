@@ -418,10 +418,6 @@ function Invoke-AntigravityPlusInjectionOnPort {
     $injectedCount = 0
 
     while ([DateTime]::UtcNow -lt $deadline) {
-        if ($LauncherKey) {
-            Hide-AntigravityWindows -Port $Port -LauncherKey $LauncherKey
-        }
-
         $targets = @(Get-AntigravityDevToolsTargets -Port $Port -TimeoutSeconds 1)
         $pageTargets = @($targets | Where-Object {
             $_.type -eq 'page' -and
@@ -438,19 +434,12 @@ function Invoke-AntigravityPlusInjectionOnPort {
             }
 
             if (Test-AntigravityPlusInjected -Port $Port -TimeoutSeconds 1) {
-                Start-Sleep -Milliseconds 150
-                if ($LauncherKey) {
-                    Show-AntigravityWindows -Port $Port -LauncherKey $LauncherKey -Foreground
-                }
                 return $true
             }
         }
-        Start-Sleep -Milliseconds 60
+        Start-Sleep -Milliseconds 250
     }
 
-    if ($LauncherKey) {
-        Show-AntigravityWindows -Port $Port -LauncherKey $LauncherKey -Foreground
-    }
     return ($injectedCount -gt 0)
 }
 
@@ -458,7 +447,7 @@ function Show-AntigravityLaunchSplash {
     param(
         [AllowEmptyString()][string]$LauncherKey,
         [int]$PreferredPort = 0,
-        [int]$TimeoutSeconds = 25
+        [int]$TimeoutSeconds = 15
     )
 
     try {
@@ -541,7 +530,7 @@ function Show-AntigravityLaunchSplash {
     $window.Show()
 
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
-    $minDisplayUntil = [DateTime]::UtcNow.AddMilliseconds(800)
+    $minDisplayUntil = [DateTime]::UtcNow.AddMilliseconds(1200)
 
     while ([DateTime]::UtcNow -lt $deadline -and $window.IsVisible) {
         [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
@@ -549,14 +538,9 @@ function Show-AntigravityLaunchSplash {
             [action]{}
         )
 
-        if ($PreferredPort -gt 0 -or $LauncherKey) {
-            Hide-AntigravityWindows -Port $PreferredPort -LauncherKey $LauncherKey
-        }
-
         if ([DateTime]::UtcNow -ge $minDisplayUntil -and $PreferredPort -gt 0) {
             if (Test-AntigravityPlusInjected -Port $PreferredPort -TimeoutSeconds 1) {
-                Show-AntigravityWindows -Port $PreferredPort -LauncherKey $LauncherKey -Foreground
-                Start-Sleep -Milliseconds 150
+                Start-Sleep -Milliseconds 200
                 break
             }
         }
@@ -565,10 +549,115 @@ function Show-AntigravityLaunchSplash {
     }
 
     try { $window.Close() } catch {}
-    if ($PreferredPort -gt 0 -or $LauncherKey) {
-        Show-AntigravityWindows -Port $PreferredPort -LauncherKey $LauncherKey -Foreground
-    }
     return $true
+}
+
+function Clear-AntigravityOrphanedProcesses {
+    [CmdletBinding()]
+    param()
+
+    $cleaned = 0
+    $now = [DateTime]::UtcNow
+
+    # 1. Terminate orphaned PowerShell monitor processes whose targets/ports are inactive (> 30s old)
+    $monitorPowershell = @(Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue | Where-Object {
+        $_.CommandLine -match 'patch\.ps1["\s]+-Launch'
+    })
+
+    foreach ($ps in $monitorPowershell) {
+        if ($ps.CreationDate) {
+            $ageSec = ($now - $ps.CreationDate.ToUniversalTime()).TotalSeconds
+            if ($ageSec -lt 30) { continue }
+        }
+
+        $cmd = [string]$ps.CommandLine
+        $portMatch = [regex]::Match($cmd, '-Port\s+(\d+)')
+        $isPortActive = $false
+        if ($portMatch.Success) {
+            $p = [int]$portMatch.Groups[1].Value
+            if ($p -gt 0) {
+                $isPortActive = Test-AntigravityPortResponding -Port $p -TimeoutMs 300
+            }
+        }
+
+        if (-not $isPortActive) {
+            try {
+                Stop-Process -Id ([int]$ps.ProcessId) -Force -ErrorAction SilentlyContinue
+                $cleaned++
+            } catch {}
+        }
+    }
+
+    # 2. Terminate orphaned Antigravity Plus instances (root process and all descendants) (> 30s old)
+    $antigravityRoots = @(Get-CimInstance Win32_Process -Filter "Name = 'Antigravity.exe'" -ErrorAction SilentlyContinue | Where-Object {
+        $cmd = [string]$_.CommandLine
+        ($cmd -like '*AntigravityPlus\profile*' -or $cmd -like '*--remote-debugging-port=*') -and
+        ($cmd -notmatch '--type=')
+    })
+
+    foreach ($root in $antigravityRoots) {
+        if ($root.CreationDate) {
+            $ageSec = ($now - $root.CreationDate.ToUniversalTime()).TotalSeconds
+            if ($ageSec -lt 30) { continue }
+        }
+
+        $rootPid = [int]$root.ProcessId
+        $cmd = [string]$root.CommandLine
+
+        # Check if root has any visible windows
+        $hasVisibleWindow = $false
+        try {
+            $handles = [AntigravityNativeWindows]::GetProcessWindowHandles(@($rootPid))
+            foreach ($h in $handles) {
+                if ([AntigravityNativeWindows]::IsWindowVisible($h)) {
+                    $hasVisibleWindow = $true
+                    break
+                }
+            }
+        } catch {}
+
+        if (-not $hasVisibleWindow) {
+            $portVal = 0
+            $portMatch = [regex]::Match($cmd, '--remote-debugging-port=(\d+)')
+            if ($portMatch.Success) {
+                $portVal = [int]$portMatch.Groups[1].Value
+            }
+
+            $isActive = ($portVal -gt 0 -and (Test-AntigravityPortResponding -Port $portVal -TimeoutMs 300))
+            if (-not $isActive) {
+                Stop-AntigravityMatchingProcesses -Port $portVal -KnownProcessIds @($rootPid)
+                $cleaned++
+            }
+        }
+    }
+
+    # 3. Clean up any leftover child processes belonging to AntigravityPlus profiles whose root PID is gone
+    $leftoverChildren = @(Get-CimInstance Win32_Process -Filter "Name = 'Antigravity.exe'" -ErrorAction SilentlyContinue | Where-Object {
+        $cmd = [string]$_.CommandLine
+        $cmd -like '*AntigravityPlus\profile*' -and ($cmd -match '--type=')
+    })
+    foreach ($child in $leftoverChildren) {
+        if ($child.CreationDate) {
+            $ageSec = ($now - $child.CreationDate.ToUniversalTime()).TotalSeconds
+            if ($ageSec -lt 30) { continue }
+        }
+
+        $parentPid = try { [int]$child.ParentProcessId } catch { 0 }
+        $parentAlive = $false
+        if ($parentPid -gt 0) {
+            $parentProc = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
+            if ($parentProc) { $parentAlive = $true }
+        }
+
+        if (-not $parentAlive) {
+            try {
+                Stop-Process -Id ([int]$child.ProcessId) -Force -ErrorAction SilentlyContinue
+                $cleaned++
+            } catch {}
+        }
+    }
+
+    return $cleaned
 }
 
 function Start-AntigravityPortMonitor {
@@ -580,25 +669,36 @@ function Start-AntigravityPortMonitor {
 
     $payload = Get-AntigravityPayloadBundle
     $consecutiveFailures = 0
-    $maxFailures = 6
+    $maxFailures = 8
     $startTime = [DateTime]::UtcNow
+    $hasEstablishedActiveSession = $false
+
+    if (-not $KnownProcessIds -or $KnownProcessIds.Count -eq 0) {
+        $KnownProcessIds = @(Get-AntigravityMatchingProcessIds -Port $Port -LauncherKey $LauncherKey)
+    }
 
     while ($true) {
-        $isSettling = ([DateTime]::UtcNow -lt $startTime.AddSeconds(12))
-        $pollInterval = if ($isSettling) { 60 } else { 1000 }
+        # Keep known process IDs updated while the instance is running
+        $currentIds = @(Get-AntigravityMatchingProcessIds -Port $Port -LauncherKey $LauncherKey)
+        if ($currentIds.Count -gt 0) {
+            $KnownProcessIds = @(@($KnownProcessIds) + @($currentIds) | Select-Object -Unique)
+        }
 
+        # Check if known root processes are still alive
+        if ($KnownProcessIds.Count -gt 0) {
+            $alive = @(Get-Process -Id $KnownProcessIds -ErrorAction SilentlyContinue)
+            if ($alive.Count -eq 0) {
+                # All root processes have terminated
+                break
+            }
+        }
+
+        # Check for DevTools targets
         $targets = $null
         try {
             $targets = @(Get-AntigravityDevToolsTargets -Port $Port -TimeoutSeconds 1)
-            $consecutiveFailures = 0
         } catch {
-            $consecutiveFailures++
-            if ($consecutiveFailures -ge $maxFailures) {
-                # Window was closed
-                break
-            }
-            Start-Sleep -Milliseconds $pollInterval
-            continue
+            $targets = @()
         }
 
         $pageTargets = @($targets | Where-Object {
@@ -606,49 +706,75 @@ function Start-AntigravityPortMonitor {
             $_.webSocketDebuggerUrl
         })
 
+        $hasRealAppPage = @($pageTargets | Where-Object { $_.url -notlike 'data:text/html*' }).Count -gt 0
+        if ($hasRealAppPage) {
+            $hasEstablishedActiveSession = $true
+        }
+
         if ($pageTargets.Count -eq 0) {
-            $consecutiveFailures++
-            if ($consecutiveFailures -ge $maxFailures) {
-                break
-            }
-        } else {
-            $consecutiveFailures = 0
-            foreach ($target in $pageTargets) {
-                $wsUrl = [string]$target.webSocketDebuggerUrl
-                if (-not $wsUrl) { continue }
-
-                # If it's early loading overlay, register addScriptToEvaluateOnNewDocument
-                if ($target.url -like 'data:text/html*') {
-                    try {
-                        Invoke-AntigravityPlusTargetInjection -Target $target -Payload $payload | Out-Null
-                    } catch {}
-                    continue
-                }
-
-                # Check if payload is already running in this document
-                $needsInjection = $true
+            $isGracePeriod = ([DateTime]::UtcNow -lt $startTime.AddSeconds(20))
+            if (-not $isGracePeriod -and $hasEstablishedActiveSession) {
+                $hasVisibleWindow = $false
                 try {
-                    $probe = Invoke-CdpEvaluate -WebSocketDebuggerUrl $wsUrl -Expression "Boolean(window.__ANTIGRAVITY_PLUS_RTL_INSTALLED && window.__GEMINI_PLUS_CONTEXT_BADGE)" -TimeoutSeconds 1
-                    if ($probe -and $probe.result -and $probe.result.result -and [bool]$probe.result.result.value) {
-                        $needsInjection = $false
+                    $handles = [AntigravityNativeWindows]::GetProcessWindowHandles($KnownProcessIds)
+                    foreach ($h in $handles) {
+                        if ([AntigravityNativeWindows]::IsWindowVisible($h)) {
+                            $hasVisibleWindow = $true
+                            break
+                        }
                     }
-                } catch {
-                    $needsInjection = $true
-                }
+                } catch {}
 
-                if ($needsInjection) {
-                    try {
-                        Invoke-AntigravityPlusTargetInjection -Target $target -Payload $payload | Out-Null
-                    } catch {}
+                if (-not $hasVisibleWindow) {
+                    $consecutiveFailures++
+                    if ($consecutiveFailures -ge $maxFailures) {
+                        break
+                    }
+                } else {
+                    $consecutiveFailures = 0
                 }
+            }
+            Start-Sleep -Milliseconds 1000
+            continue
+        }
+
+        # Reset consecutive failures when valid page targets are active
+        $consecutiveFailures = 0
+
+        foreach ($target in $pageTargets) {
+            $wsUrl = [string]$target.webSocketDebuggerUrl
+            if (-not $wsUrl) { continue }
+
+            # If it's early loading overlay, register addScriptToEvaluateOnNewDocument
+            if ($target.url -like 'data:text/html*') {
+                try {
+                    Invoke-AntigravityPlusTargetInjection -Target $target -Payload $payload | Out-Null
+                } catch {}
+                continue
+            }
+
+            # Check if payload is already running in this document
+            $needsInjection = $true
+            try {
+                $probe = Invoke-CdpEvaluate -WebSocketDebuggerUrl $wsUrl -Expression "Boolean(window.__ANTIGRAVITY_PLUS_RTL_INSTALLED && window.__GEMINI_PLUS_CONTEXT_BADGE)" -TimeoutSeconds 1
+                if ($probe -and $probe.result -and $probe.result.result -and [bool]$probe.result.result.value) {
+                    $needsInjection = $false
+                }
+            } catch {
+                $needsInjection = $true
+            }
+
+            if ($needsInjection) {
+                try {
+                    Invoke-AntigravityPlusTargetInjection -Target $target -Payload $payload | Out-Null
+                } catch {}
             }
         }
 
-        Start-Sleep -Milliseconds $pollInterval
+        Start-Sleep -Milliseconds 1000
     }
 
-    # The window is gone, but Antigravity may remain alive because its
-    # run-in-background setting is enabled. Clean up this exact instance.
+    # The window is gone or processes terminated. Clean up this exact instance.
     Stop-AntigravityMatchingProcesses -Port $Port -LauncherKey $LauncherKey -KnownProcessIds $KnownProcessIds
 }
 
@@ -663,6 +789,9 @@ function Launch-AntigravityPlus {
     if (-not $installInfo.Installed) {
         throw 'Antigravity was not found. Please install Google Antigravity first.'
     }
+
+    # Prune old orphaned zombies (>30s old with no window/targets) before starting
+    Clear-AntigravityOrphanedProcesses | Out-Null
 
     if ([string]::IsNullOrWhiteSpace($LauncherKey)) {
         $LauncherKey = $env:ANTIGRAVITY_PLUS_LAUNCHER_KEY
@@ -679,9 +808,9 @@ function Launch-AntigravityPlus {
         New-Item -ItemType Directory -Force -Path $userDataDir | Out-Null
     }
 
-    # Pre-seed app_storage.json in ASCII (NO UTF-8 BOM) to ensure runInBackground and skip setup wizard
+    # Pre-seed app_storage.json in ASCII (NO UTF-8 BOM) with runInBackground: false to ensure process exits on window close
     $storageFile = Join-Path $userDataDir 'app_storage.json'
-    $storageJson = '{"runInBackground":"true","ide-install-wizard-shown":"true","autoCheckForUpdates":"false"}'
+    $storageJson = '{"runInBackground":"false","ide-install-wizard-shown":"true","autoCheckForUpdates":"false"}'
     [System.IO.File]::WriteAllText($storageFile, $storageJson, [System.Text.Encoding]::ASCII)
 
     # Fallback pre-seed in default local data dir
@@ -690,7 +819,15 @@ function Launch-AntigravityPlus {
         New-Item -ItemType Directory -Force -Path $fallbackDir | Out-Null
     }
     $fallbackStorage = Join-Path $fallbackDir 'app_storage.json'
-    if (-not (Test-Path -LiteralPath $fallbackStorage)) {
+    if (Test-Path -LiteralPath $fallbackStorage) {
+        try {
+            $existing = [System.IO.File]::ReadAllText($fallbackStorage)
+            if ($existing -match '"runInBackground"\s*:\s*"true"') {
+                $updated = $existing -replace '"runInBackground"\s*:\s*"true"', '"runInBackground":"false"'
+                [System.IO.File]::WriteAllText($fallbackStorage, $updated, [System.Text.Encoding]::ASCII)
+            }
+        } catch {}
+    } else {
         [System.IO.File]::WriteAllText($fallbackStorage, $storageJson, [System.Text.Encoding]::ASCII)
     }
 
@@ -699,9 +836,6 @@ function Launch-AntigravityPlus {
 
     Write-Info "Waiting for Antigravity window to become ready..."
     $injected = Invoke-AntigravityPlusInjectionOnPort -Port $port -LauncherKey $LauncherKey -TimeoutSeconds 30
-
-    # Ensure windows are visible and foregrounded
-    Show-AntigravityWindows -Port $port -LauncherKey $LauncherKey -Foreground
 
     if ($injected) {
         # Trigger visual toast in the new window

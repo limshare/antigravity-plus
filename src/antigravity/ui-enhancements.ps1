@@ -21,7 +21,17 @@ function Get-AntigravityUiEnhancementsPayload {
     }
   }, true);
 
-  console.log('[Antigravity Plus] UI Enhancements installed (Ctrl+Shift+R to toggle RTL).');
+  // Hide Notification Preferences prompt toast
+  const style = document.createElement('style');
+  style.setAttribute('data-antigravity-plus-hide-notifications', 'true');
+  style.textContent = `
+    .toast-viewport .toast-root:not(:has(svg)):has(p):has(button.bg-primary + button.bg-secondary) {
+      display: none !important;
+    }
+  `;
+  (document.head || document.documentElement).appendChild(style);
+
+  console.log('[Antigravity Plus] UI Enhancements installed (Ctrl+Shift+R to toggle RTL, Notification prompt hidden).');
 })();
 '@
 }

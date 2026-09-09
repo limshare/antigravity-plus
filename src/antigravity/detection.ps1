@@ -72,7 +72,7 @@ function Get-AntigravityInstallInfo {
 
 function Get-AntigravityProcesses {
     try {
-        return @(Get-CimInstance Win32_Process -Filter "Name like '%antigravity%'" -ErrorAction Stop)
+        return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '*antigravity*' })
     } catch {
         return @(Get-Process | Where-Object { $_.ProcessName -like '*antigravity*' })
     }

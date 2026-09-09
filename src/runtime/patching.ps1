@@ -4,6 +4,9 @@ function Install-AntigravityPlus {
         throw 'Antigravity was not found on this system.'
     }
 
+    # Clean up any leftover orphaned background processes
+    Clear-AntigravityOrphanedProcesses | Out-Null
+
     $sourceRoot = if ($PSScriptRoot) {
         Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
     } else {
@@ -36,6 +39,8 @@ function Install-AntigravityPlus {
 
 function Restore-AntigravityPlus {
     Write-Info "Restoring Antigravity to original unpatched state..."
+    Clear-AntigravityOrphanedProcesses | Out-Null
+
     $state = Read-AntigravityPlusState
     $ownedShortcuts = if ($state -and $state.OwnedShortcuts) { @($state.OwnedShortcuts) } else { @() }
 
