@@ -4,8 +4,9 @@ temp/
 *.log
 *.tmp
 
-# Installer dist output
-dist/
+# Installer dist output (track release setup exe)
+dist/*
+!dist/AntigravityPlus-Setup.exe
 
 # PowerShell temporary artifacts
 *.ps1xml
