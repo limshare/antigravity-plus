@@ -838,13 +838,6 @@ function Launch-AntigravityPlus {
     $injected = Invoke-AntigravityPlusInjectionOnPort -Port $port -LauncherKey $LauncherKey -TimeoutSeconds 30
 
     if ($injected) {
-        # Trigger visual toast in the new window
-        try {
-            $page = Get-AntigravityActivePageTarget -Port $port -TimeoutSeconds 3
-            if ($page) {
-                Invoke-CdpEvaluate -WebSocketDebuggerUrl $page.webSocketDebuggerUrl -Expression "typeof showLaunchToast === 'function' ? showLaunchToast('✨ <b>Antigravity Plus</b> Active &amp; RTL Ready!') : null" | Out-Null
-            }
-        } catch {}
         Write-Success "Antigravity Plus launched with full RTL & enhancement layer active (Port $port)!"
     } else {
         Write-Warn "Antigravity window launched, but target injection timed out on port $port."

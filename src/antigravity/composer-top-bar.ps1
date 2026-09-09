@@ -2,6 +2,8 @@ function Get-AntigravityComposerTopBarPayload {
     @'
 (function () {
   const TOP_BAR_ATTR = 'data-gemini-plus-composer-top-bar';
+  const PROJECT_BTN_ATTR = 'data-gemini-plus-composer-project-btn';
+  const CHEVRON_ATTR = 'data-gemini-plus-composer-project-chevron';
   const NEW_CHAT_BTN_ATTR = 'data-gemini-plus-composer-new-chat';
   const GIT_GROUP_ATTR = 'data-gemini-plus-composer-git-group';
   const COMMIT_BTN_ATTR = 'data-gemini-plus-composer-commit';
@@ -10,6 +12,7 @@ function Get-AntigravityComposerTopBarPayload {
   const PROJECT_VAL_ATTR = 'data-gemini-plus-composer-project';
   const PROCESS_BADGE_ATTR = 'data-gemini-plus-composer-process';
   const PROCESS_COUNT_ATTR = 'data-gemini-plus-process-count';
+  const BUILD_VERSION = '2026.09.09.2';
   const STYLE_ID = 'gemini-plus-composer-top-bar-style';
 
   if (window.__GEMINI_PLUS_COMPOSER_TOP_BAR && window.__GEMINI_PLUS_COMPOSER_TOP_BAR.observer) {
@@ -63,8 +66,7 @@ function Get-AntigravityComposerTopBarPayload {
         margin-top: 0 !important;
       }
 
-      [data-gemini-plus-composer-top-bar] + * .bg-card,
-      [data-gemini-plus-composer-top-bar] + * [class*="rounded"] {
+      [data-gemini-plus-composer-top-bar] + * > .bg-card {
         border-top-left-radius: 0 !important;
         border-top-right-radius: 0 !important;
         border-top: 0 !important;
@@ -94,6 +96,19 @@ function Get-AntigravityComposerTopBarPayload {
         display: none !important;
       }
 
+      /* Hide redundant native empty-state project selector above composer */
+      .no-focus-agent-input:has([data-testid="project-selector-trigger"]),
+      .no-focus-agent-input:has(button[aria-label*="Select project" i]),
+      .no-focus-agent-input:has(button[aria-haspopup="menu"]) {
+        position: absolute !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+      }
+
       [data-gemini-plus-composer-commit]:disabled,
       [data-gemini-plus-composer-push]:disabled {
         opacity: 0.45 !important;
@@ -110,6 +125,26 @@ function Get-AntigravityComposerTopBarPayload {
   }
 
   function currentProjectName() {
+    // 0. Resolve from live project selector trigger if present (in new chat / empty state)
+    const nativeTrigger = document.querySelector('[data-testid="project-selector-trigger"], button[aria-label*="Select project" i]');
+    if (nativeTrigger) {
+      const span = nativeTrigger.querySelector('span');
+      const val = normalizeText(span ? span.textContent : nativeTrigger.textContent);
+      if (val) {
+        try { sessionStorage.setItem('antigravity_plus_last_project', val); } catch (e) {}
+        return val;
+      }
+    }
+
+    const breadcrumb = document.querySelector('[data-testid="breadcrumb-segment"]');
+    if (breadcrumb) {
+      const val = normalizeText(breadcrumb.textContent);
+      if (val && !val.toLowerCase().includes('chat') && !val.toLowerCase().includes('task')) {
+        try { sessionStorage.setItem('antigravity_plus_last_project', val); } catch (e) {}
+        return val;
+      }
+    }
+
     // 1. Resolve from sidebar React Fiber items
     const sidebar = document.querySelector('[data-testid="conversation-list-sidebar"]');
     if (sidebar) {
@@ -174,6 +209,17 @@ function Get-AntigravityComposerTopBarPayload {
     return localStorage.getItem('antigravity_plus_last_project') || 'Workspace';
   }
 
+  function isNewChat() {
+    if (document.querySelector('[data-testid="project-selector-trigger"], button[aria-label*="Select project" i]')) {
+      return true;
+    }
+    const path = location.pathname;
+    if (path === '/' || path === '' || path === '/task/new' || path === '/c/new') {
+      return true;
+    }
+    return false;
+  }
+
   function currentBranchName() {
     const cached = localStorage.getItem('antigravity_plus_branch');
     if (cached) return cached;
@@ -229,6 +275,19 @@ function Get-AntigravityComposerTopBarPayload {
     svg.setAttribute('aria-hidden', 'true');
     svg.style.flexShrink = '0';
     svg.innerHTML = '<path d="M2.5 5.5A1.5 1.5 0 0 1 4 4h3.379a1.5 1.5 0 0 1 1.06.44l1.122 1.12a1.5 1.5 0 0 0 1.06.44H16A1.5 1.5 0 0 1 17.5 7.5v7A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5v-9Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>';
+    return svg;
+  }
+
+  function createChevronDownIcon() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '12');
+    svg.setAttribute('height', '12');
+    svg.setAttribute('viewBox', '0 0 16 16');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.style.flexShrink = '0';
+    svg.style.opacity = '0.75';
+    svg.innerHTML = '<path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
     return svg;
   }
 
@@ -420,26 +479,173 @@ function Get-AntigravityComposerTopBarPayload {
     };
   }
 
-  function triggerNewChat() {
-    const candidates = [
-      'button[data-testid="new-conversation-button"]',
-      'button[data-testid="new-task-button"]',
-      'button[data-testid="new-chat-button"]',
-      'button[aria-label*="New Chat" i]',
-      'button[aria-label*="New conversation" i]',
-      'button[aria-label*="New task" i]',
-      'button[title*="New Chat" i]',
-      'button[title*="New conversation" i]',
-      'button[title*="New task" i]'
-    ];
-    for (const sel of candidates) {
-      const btn = document.querySelector(sel);
-      if (btn && btn.offsetParent !== null) {
-        btn.click();
+  function triggerProjectSelect(anchorEl) {
+    if (!isNewChat()) return;
+    const nativeTrigger = document.querySelector('[data-testid="project-selector-trigger"], button[aria-label*="Select project" i]');
+    if (nativeTrigger) {
+      if (anchorEl) {
+        const rect = anchorEl.getBoundingClientRect();
+        nativeTrigger.style.position = 'fixed';
+        nativeTrigger.style.top = rect.top + 'px';
+        nativeTrigger.style.left = rect.left + 'px';
+        nativeTrigger.style.width = rect.width + 'px';
+        nativeTrigger.style.height = rect.height + 'px';
+        nativeTrigger.style.zIndex = '-1';
+        nativeTrigger.style.opacity = '0';
+        nativeTrigger.style.pointerEvents = 'none';
+      }
+      try {
+        nativeTrigger.click();
         return;
+      } catch (e) {
+        console.warn('[Antigravity Plus] Error clicking native project trigger:', e);
       }
     }
+  }
+
+  function syncProjectElement(bar) {
+    if (!bar) return;
+    const project = bar.querySelector('[' + PROJECT_BTN_ATTR + ']');
+    const projectText = bar.querySelector('[' + PROJECT_VAL_ATTR + ']');
+    const chevron = bar.querySelector('[' + CHEVRON_ATTR + ']');
+    if (!project || !projectText) return;
+
+    projectText.textContent = currentProjectName();
+
+    const canSelect = isNewChat();
+    if (chevron) {
+      chevron.style.display = canSelect ? 'inline-flex' : 'none';
+    }
+
+    if (canSelect) {
+      project.style.cursor = 'pointer';
+      project.style.pointerEvents = 'auto';
+      project.title = 'Switch workspace / project';
+      project.setAttribute('aria-label', 'Select project');
+      project.setAttribute('aria-disabled', 'false');
+    } else {
+      project.style.cursor = 'default';
+      project.style.pointerEvents = 'none';
+      project.style.background = 'transparent';
+      project.title = 'Workspace: ' + projectText.textContent;
+      project.setAttribute('aria-label', 'Project workspace');
+      project.setAttribute('aria-disabled', 'true');
+    }
+  }
+
+  function getRouter() {
+    const root = document.getElementById('root') || document.body.firstElementChild;
+    const k = root ? Object.keys(root).find((k) => k.startsWith('__reactContainer$') || k.startsWith('__reactFiber$')) : null;
+    let current = root ? root[k] : null;
+    let router = null;
+    function traverse(fiber, depth = 0) {
+      if (!fiber || depth > 35 || router) return;
+      if (fiber.memoizedProps && fiber.memoizedProps.router && typeof fiber.memoizedProps.router.navigate === 'function') {
+        router = fiber.memoizedProps.router;
+        return;
+      }
+      if (fiber.child) traverse(fiber.child, depth + 1);
+      if (fiber.sibling) traverse(fiber.sibling, depth);
+    }
+    traverse(current);
+    return router;
+  }
+
+  function getActiveSectionId() {
+    const urlParams = new URLSearchParams(location.search);
+    const sec = urlParams.get('section');
+    if (sec) return sec;
+
+    const sidebar = document.querySelector('[data-testid="conversation-list-sidebar"]');
+    if (sidebar) {
+      const fiberKey = Object.keys(sidebar).find((k) => k.startsWith('__reactFiber$'));
+      if (fiberKey && sidebar[fiberKey]) {
+        let f = sidebar[fiberKey];
+        while (f) {
+          if (f.memoizedProps && f.memoizedProps.items) {
+            const items = f.memoizedProps.items;
+            const threadMatch = location.pathname.match(/\/c\/([a-zA-Z0-9_-]+)/);
+            const currentThreadId = threadMatch ? threadMatch[1] : null;
+            if (currentThreadId && Array.isArray(items)) {
+              const currentItem = items.find((i) => i.cascadeId === currentThreadId);
+              if (currentItem) {
+                return currentItem.groupId || currentItem.summary?.trajectoryMetadata?.projectId || null;
+              }
+            }
+            break;
+          }
+          f = f.return;
+        }
+      }
+    }
+    return null;
+  }
+
+  function focusComposerInput() {
+    setTimeout(() => {
+      const input = document.querySelector('[contenteditable="true"], textarea');
+      if (input) {
+        try {
+          input.focus();
+        } catch (e) {}
+      }
+    }, 150);
+  }
+
+  function triggerNewChat() {
+    // 1. TanStack Router direct programmatic navigation (fastest & robust)
+    const router = getRouter();
+    const sectionId = getActiveSectionId();
+    if (router && typeof router.navigate === 'function') {
+      try {
+        if (sectionId) {
+          router.navigate({ to: '/', search: { section: sectionId } });
+        } else {
+          router.navigate({ to: '/' });
+        }
+        focusComposerInput();
+        return;
+      } catch (e) {
+        console.warn('[Antigravity Plus] TanStack router navigation failed:', e);
+      }
+    }
+
+    // 2. Candidate DOM elements (buttons & links)
+    const candidates = [
+      'button[data-testid="new-conversation-button"]',
+      'a[data-testid="new-conversation-button"]',
+      'button[data-testid="new-task-button"]',
+      'a[data-testid="new-task-button"]',
+      'button[data-testid="new-chat-button"]',
+      'a[data-testid="new-chat-button"]',
+      'button[aria-label*="New Chat" i]',
+      'a[aria-label*="New Chat" i]',
+      'button[aria-label*="New conversation" i]',
+      'a[aria-label*="New conversation" i]',
+      'button[aria-label*="New task" i]',
+      'a[aria-label*="New task" i]',
+      'a[href="/"]',
+      'a[href^="/?section="]'
+    ];
+    for (const sel of candidates) {
+      const el = document.querySelector(sel);
+      if (el) {
+        try {
+          el.click();
+          focusComposerInput();
+          return;
+        } catch (e) {}
+      }
+    }
+
+    // 3. Fallback: window navigation
+    if (sectionId) {
+      window.location.href = '/?section=' + encodeURIComponent(sectionId);
+    } else {
+      window.location.href = '/';
+    }
     window.dispatchEvent(new CustomEvent('antigravity-plus-new-chat'));
+    focusComposerInput();
   }
 
   function triggerCommitAction() {
@@ -499,20 +705,44 @@ function Get-AntigravityComposerTopBarPayload {
   function createComposerTopBar() {
     const bar = document.createElement('div');
     bar.setAttribute(TOP_BAR_ATTR, 'true');
+    bar.setAttribute('data-gemini-plus-version', BUILD_VERSION);
     bar.setAttribute('aria-label', 'Composer context');
 
     const pillStyle = 'display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:6px;background:transparent;color:inherit;font-size:13px;';
     const btnStyle = pillStyle + 'border:1px solid transparent;cursor:pointer;outline:none;transition:background 0.15s ease;';
 
-    // 1. Project
-    const project = document.createElement('span');
-    project.setAttribute('style', pillStyle);
+    // 1. Project Selector Button (acts like the live one and includes select indicator)
+    const project = document.createElement('button');
+    project.type = 'button';
+    project.setAttribute(PROJECT_BTN_ATTR, 'true');
+    project.setAttribute('style', btnStyle);
+    project.setAttribute('aria-label', 'Select project');
+    project.title = 'Switch workspace / project';
     project.appendChild(createProjectFolderIcon());
     const projectText = document.createElement('span');
     projectText.setAttribute(PROJECT_VAL_ATTR, 'true');
     projectText.style.fontWeight = '600';
     projectText.textContent = currentProjectName();
     project.appendChild(projectText);
+    const chevron = createChevronDownIcon();
+    chevron.setAttribute(CHEVRON_ATTR, 'true');
+    project.appendChild(chevron);
+
+    project.addEventListener('mouseenter', () => {
+      if (isNewChat()) {
+        project.style.background = 'rgba(128, 128, 128, 0.18)';
+      }
+    });
+    project.addEventListener('mouseleave', () => {
+      project.style.background = 'transparent';
+    });
+    project.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isNewChat()) {
+        triggerProjectSelect(project);
+      }
+    });
 
     // 2. Location (Local)
     const location = document.createElement('span');
@@ -624,6 +854,7 @@ function Get-AntigravityComposerTopBarPayload {
     gitGroup.append(commit, push);
 
     bar.append(project, location, branch, processBadge, newChat, gitGroup);
+    syncProjectElement(bar);
     syncGitActionButtons(bar);
     return bar;
   }
@@ -729,14 +960,13 @@ function Get-AntigravityComposerTopBarPayload {
     if (!anchor || !anchor.container) return;
 
     let existingBar = document.querySelector('[' + TOP_BAR_ATTR + ']');
-    if (existingBar && (!existingBar.querySelector('[' + PUSH_BTN_ATTR + ']') || !existingBar.querySelector('[' + GIT_GROUP_ATTR + ']'))) {
+    if (existingBar && existingBar.getAttribute('data-gemini-plus-version') !== BUILD_VERSION) {
       existingBar.remove();
       existingBar = null;
     }
 
     if (existingBar) {
-      const projectLabel = existingBar.querySelector('[' + PROJECT_VAL_ATTR + ']');
-      if (projectLabel) projectLabel.textContent = currentProjectName();
+      syncProjectElement(existingBar);
 
       const branchLabel = existingBar.querySelector('[' + BRANCH_VAL_ATTR + ']');
       if (branchLabel) branchLabel.textContent = currentBranchName();

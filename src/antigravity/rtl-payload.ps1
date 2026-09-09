@@ -2,7 +2,7 @@ function Get-AntigravityRtlPayload {
     @'
 (function () {
   if (window.__ANTIGRAVITY_PLUS_RTL_INSTALLED) {
-    // Already running - refresh styles, indicator, and show toast
+    // Already running - refresh styles
     const oldStyle = document.getElementById('antigravity-plus-rtl-style');
     if (oldStyle) oldStyle.remove();
   }
@@ -112,37 +112,7 @@ function Get-AntigravityRtlPayload {
     if (oldIndicator) oldIndicator.remove();
   }
 
-  function showLaunchToast(message) {
-    let toast = document.getElementById('antigravity-plus-toast');
-    if (!toast) {
-      toast = document.createElement('div');
-      toast.id = 'antigravity-plus-toast';
-      document.body.appendChild(toast);
-    }
-    toast.innerHTML = message || '✨ <b>Antigravity Plus</b> is active (RTL Enabled)';
-    Object.assign(toast.style, {
-      position: 'fixed',
-      top: '16px',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      backgroundColor: '#059669',
-      color: '#ffffff',
-      padding: '10px 22px',
-      borderRadius: '8px',
-      boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-      zIndex: '9999999',
-      fontSize: '13px',
-      fontWeight: '500',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      pointerEvents: 'none',
-      opacity: '1',
-      transition: 'opacity 0.4s ease, transform 0.4s ease'
-    });
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateX(-50%) translateY(-10px)';
-    }, 4000);
-  }
+  // Toast removed
 
   const TEXT_TAGS = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE', 'TH', 'TD'];
   const EXCLUDE_TAGS = ['PRE', 'CODE', 'KBD', 'SAMP', 'SCRIPT', 'STYLE', 'SVG', 'INPUT', 'BUTTON'];
@@ -219,7 +189,6 @@ function Get-AntigravityRtlPayload {
   // Initial pass
   injectStyles();
   processTree(document.body);
-  showLaunchToast();
 
   // MutationObserver with debounce for high-volume streaming
   let debounceTimer = null;
