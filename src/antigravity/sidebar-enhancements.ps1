@@ -175,7 +175,9 @@ function Get-AntigravitySidebarEnhancementsPayload {
   }
 
   let isRestoringStates = false;
-  const lastStateActionTimes = new Map();
+  const userActionTimes = new Map();
+  const restoredCards = new WeakSet();
+  const restoredSections = new WeakSet();
 
   function restoreOpenStates() {
     if (isRestoringStates) return;
@@ -186,13 +188,24 @@ function Get-AntigravitySidebarEnhancementsPayload {
       const projectCards = document.querySelectorAll('button[data-project-card="true"]');
       projectCards.forEach(card => {
         const name = (card.innerText || '').trim();
-        if (!name || !(name in savedProjects)) return;
-        const shouldBeExpanded = savedProjects[name];
+        if (!name) return;
+
+        // Skip if user recently clicked this project
+        const lastUserAction = userActionTimes.get(name) || 0;
+        if (now - lastUserAction < 2000) {
+          restoredCards.add(card);
+          return;
+        }
+
+        // Each card DOM element only needs auto-restoration once upon mounting
+        if (restoredCards.has(card)) return;
+        restoredCards.add(card);
+
+        if (!(name in savedProjects)) return;
+        const shouldBeExpanded = Boolean(savedProjects[name]);
         const isCurrentlyExpanded = card.getAttribute('aria-expanded') === 'true';
 
-        const lastAction = lastStateActionTimes.get(card) || 0;
-        if (shouldBeExpanded !== isCurrentlyExpanded && (now - lastAction > 500)) {
-          lastStateActionTimes.set(card, now);
+        if (shouldBeExpanded !== isCurrentlyExpanded) {
           try { card.click(); } catch(e) {}
         }
       });
@@ -202,15 +215,26 @@ function Get-AntigravitySidebarEnhancementsPayload {
       sectionHeaders.forEach(sh => {
         const title = (sh.getAttribute('data-title') || sh.innerText || '').trim();
         const cleanTitle = replaceText(title);
-        if (!cleanTitle || !(cleanTitle in savedSections)) return;
+        if (!cleanTitle) return;
         const btn = sh.querySelector('button');
         if (!btn) return;
-        const shouldBeExpanded = savedSections[cleanTitle];
+
+        // Skip if user recently clicked this section
+        const lastUserAction = userActionTimes.get(cleanTitle) || 0;
+        if (now - lastUserAction < 2000) {
+          restoredSections.add(btn);
+          return;
+        }
+
+        // Each section button DOM element only needs auto-restoration once upon mounting
+        if (restoredSections.has(btn)) return;
+        restoredSections.add(btn);
+
+        if (!(cleanTitle in savedSections)) return;
+        const shouldBeExpanded = Boolean(savedSections[cleanTitle]);
         const isCurrentlyExpanded = btn.getAttribute('aria-expanded') === 'true';
 
-        const lastAction = lastStateActionTimes.get(btn) || 0;
-        if (shouldBeExpanded !== isCurrentlyExpanded && (now - lastAction > 500)) {
-          lastStateActionTimes.set(btn, now);
+        if (shouldBeExpanded !== isCurrentlyExpanded) {
           try { btn.click(); } catch(e) {}
         }
       });
@@ -221,6 +245,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
 
   // Global click listener to track user project/section expansion
   document.addEventListener('click', (e) => {
+    if (window.__GEMINI_PLUS_SIDEBAR_INSTANCE !== INSTANCE_ID) return;
     if (isRestoringStates) return;
     const target = e.target;
     if (!target) return;
@@ -228,10 +253,17 @@ function Get-AntigravitySidebarEnhancementsPayload {
     const projectCard = target.closest('button[data-project-card="true"]');
     if (projectCard) {
       const name = (projectCard.innerText || '').trim();
-      setTimeout(() => {
-        const isExpanded = projectCard.getAttribute('aria-expanded') === 'true';
-        saveProjectState(name, isExpanded);
-      }, 50);
+      if (name) {
+        const wasExpanded = projectCard.getAttribute('aria-expanded') === 'true';
+        const nextExpanded = !wasExpanded;
+        userActionTimes.set(name, Date.now());
+        saveProjectState(name, nextExpanded);
+        restoredCards.add(projectCard);
+        setTimeout(() => {
+          const actualExpanded = projectCard.getAttribute('aria-expanded') === 'true';
+          saveProjectState(name, actualExpanded);
+        }, 150);
+      }
       return;
     }
 
@@ -240,10 +272,17 @@ function Get-AntigravitySidebarEnhancementsPayload {
       const sh = sectionBtn.closest('[data-testid="section-header"]');
       const title = (sh?.getAttribute('data-title') || sh?.innerText || '').trim();
       const cleanTitle = replaceText(title);
-      setTimeout(() => {
-        const isExpanded = sectionBtn.getAttribute('aria-expanded') === 'true';
-        saveSectionState(cleanTitle, isExpanded);
-      }, 50);
+      if (cleanTitle) {
+        const wasExpanded = sectionBtn.getAttribute('aria-expanded') === 'true';
+        const nextExpanded = !wasExpanded;
+        userActionTimes.set(cleanTitle, Date.now());
+        saveSectionState(cleanTitle, nextExpanded);
+        restoredSections.add(sectionBtn);
+        setTimeout(() => {
+          const actualExpanded = sectionBtn.getAttribute('aria-expanded') === 'true';
+          saveSectionState(cleanTitle, actualExpanded);
+        }, 150);
+      }
       return;
     }
   }, true);
@@ -340,29 +379,58 @@ function Get-AntigravitySidebarEnhancementsPayload {
 
   function syncNativeRowIndicators() {
     const unreadSet = getUnreadThreads();
+    const workingSet = getWorkingThreads();
     const nativeRows = document.querySelectorAll('[data-testid="conversation-row-sidebar"]');
     nativeRows.forEach(row => {
-      // Real rows already have native status spinners; remove any synthetic spinners from real rows
-      const spinner = row.querySelector('[data-gemini-plus-thread-spinner="true"]');
-      if (spinner) spinner.remove();
-
-      const parent = row.closest('[data-cascade-id]') || row.querySelector('[data-cascade-id]') || row.querySelector('a[href^="/c/"]');
-      const href = parent?.getAttribute('href') || row.querySelector('a')?.getAttribute('href');
-      const cascadeId = parent?.getAttribute('data-cascade-id') || href?.match(/\/c\/([0-9a-f-]+)/i)?.[1];
+      let cascadeId = row.getAttribute('data-cascade-id');
+      if (!cascadeId) {
+        const parent = row.closest('[data-cascade-id]') || row.querySelector('[data-cascade-id]') || row.querySelector('a[href*="/c/"]');
+        const href = parent?.getAttribute('href') || row.querySelector('a')?.getAttribute('href') || row.closest('a')?.getAttribute('href');
+        cascadeId = parent?.getAttribute('data-cascade-id') || href?.match(/\/c\/([0-9a-f-]+)/i)?.[1];
+      }
+      if (!cascadeId) {
+        const fiberKey = Object.keys(row).find(k => k.startsWith('__reactFiber$'));
+        if (fiberKey) {
+          let fiber = row[fiberKey];
+          while (fiber && !cascadeId) {
+            if (fiber.memoizedProps) {
+              if (fiber.memoizedProps.cascadeId) cascadeId = fiber.memoizedProps.cascadeId;
+              else if (fiber.memoizedProps.item?.cascadeId) cascadeId = fiber.memoizedProps.item.cascadeId;
+              else if (fiber.memoizedProps.conversation?.cascadeId) cascadeId = fiber.memoizedProps.conversation.cascadeId;
+              else if (fiber.memoizedProps.id && /^[0-9a-f-]{36}$/i.test(fiber.memoizedProps.id)) cascadeId = fiber.memoizedProps.id;
+            }
+            fiber = fiber.return;
+          }
+        }
+      }
       if (!cascadeId) return;
 
-      let unread = row.querySelector('[data-gemini-plus-thread-unread="true"]');
-      const isUnread = unreadSet.has(cascadeId);
+      const isWorking = workingSet.has(cascadeId);
+      const isUnread = !isWorking && unreadSet.has(cascadeId);
 
-      if (isUnread) {
-        if (!unread) {
-          const dotEl = document.createElement('div');
-          dotEl.innerHTML = getUnreadDotHtml();
-          const target = dotEl.firstElementChild;
+      let spinner = row.querySelector('[data-gemini-plus-thread-spinner="true"]');
+      let unread = row.querySelector('[data-gemini-plus-thread-unread="true"]');
+
+      if (isWorking) {
+        if (unread) unread.remove();
+        if (!spinner) {
+          const spinEl = document.createElement('div');
+          spinEl.innerHTML = getSpinnerHtml();
+          const target = spinEl.firstElementChild;
           row.appendChild(target);
         }
       } else {
-        if (unread) unread.remove();
+        if (spinner) spinner.remove();
+        if (isUnread) {
+          if (!unread) {
+            const dotEl = document.createElement('div');
+            dotEl.innerHTML = getUnreadDotHtml();
+            const target = dotEl.firstElementChild;
+            row.appendChild(target);
+          }
+        } else {
+          if (unread) unread.remove();
+        }
       }
     });
   }
@@ -627,21 +695,26 @@ function Get-AntigravitySidebarEnhancementsPayload {
       layoutElements.unshift(section);
     }
 
-    // 4. Position all elements sequentially
-    let currentY = 0;
-    layoutElements.forEach(el => {
-      el.style.position = 'absolute';
-      el.style.top = '0px';
-      el.style.left = '0px';
-      el.style.width = '100%';
-      el.style.transform = `translateY(${currentY}px)`;
-      if (el === section) el.style.zIndex = '5';
+    // 4. Position all elements sequentially without layout thrashing
+    const heights = layoutElements.map(el => Math.round(el.getBoundingClientRect().height) || el.offsetHeight || 33);
 
-      const h = Math.round(el.getBoundingClientRect().height) || el.offsetHeight || 33;
-      currentY += h;
+    let currentY = 0;
+    layoutElements.forEach((el, i) => {
+      if (el.style.position !== 'absolute') el.style.position = 'absolute';
+      if (el.style.top !== '0px') el.style.top = '0px';
+      if (el.style.left !== '0px') el.style.left = '0px';
+      if (el.style.width !== '100%') el.style.width = '100%';
+      const transform = `translateY(${currentY}px)`;
+      if (el.style.transform !== transform) el.style.transform = transform;
+      if (el === section && el.style.zIndex !== '10') el.style.zIndex = '10';
+
+      currentY += heights[i];
     });
 
-    inner.style.height = `${currentY}px`;
+    const nextHeight = `${currentY}px`;
+    if (inner.style.height !== nextHeight) {
+      inner.style.height = nextHeight;
+    }
   }
 
   function renderRecentsSection(sidebarEl) {
@@ -653,7 +726,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
     if (!section) {
       section = document.createElement('div');
       section.setAttribute(SYNTHETIC_SECTION_ATTR, 'recents');
-      section.className = 'w-full my-1 bg-sidebar select-none';
+      section.className = 'w-full bg-sidebar select-none';
       inner.appendChild(section);
 
       sidebarEl.addEventListener('scroll', () => {
@@ -730,8 +803,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
       const indicatorHtml = isWorking ? getSpinnerHtml() : (isUnread ? getUnreadDotHtml() : '');
 
       return `
-        <div ${SYNTHETIC_ROW_ATTR}="true" data-cascade-id="${t.cascadeId}" class="relative w-full select-none cursor-pointer rounded-lg flex flex-row justify-between group pl-[30px] pr-2 py-1.5 items-center transition-colors ${activeClasses}">
-          <a href="/c/${t.cascadeId}" class="inline-flex items-center font-medium transition-colors select-none outline-none cursor-pointer justify-center disabled:opacity-50 absolute inset-0 rounded-lg no-underline focus-visible:![--tw-ring-inset:inset]" aria-label="${displayTitle.replace(/"/g, '&quot;')}" draggable="false"></a>
+        <div ${SYNTHETIC_ROW_ATTR}="true" data-cascade-id="${t.cascadeId}" role="button" tabindex="0" class="relative w-full select-none cursor-pointer rounded-lg flex flex-row justify-between group pl-[30px] pr-2 py-1.5 items-center transition-colors ${activeClasses}">
           <div class="relative flex gap-2 grow min-w-0 items-center pointer-events-none">
             <div class="flex flex-col items-start min-w-0 transition-opacity w-full">
               <span class="truncate inline-block truncate text-left w-full text-sm" title="${displayTitle.replace(/"/g, '&quot;')}">${displayTitle}</span>
@@ -763,9 +835,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
 
       // Attach row navigation listeners
       list.querySelectorAll('[' + SYNTHETIC_ROW_ATTR + ']').forEach(row => {
-        row.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        const navigate = () => {
           const cascadeId = row.getAttribute('data-cascade-id');
           if (cascadeId) {
             if (window.__TSR_ROUTER__ && window.__TSR_ROUTER__.history) {
@@ -773,6 +843,28 @@ function Get-AntigravitySidebarEnhancementsPayload {
             } else {
               window.location.assign('/c/' + cascadeId);
             }
+          }
+        };
+
+        row.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          navigate();
+        });
+
+        row.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            navigate();
+          }
+        });
+
+        row.addEventListener('auxclick', (e) => {
+          if (e.button === 1) {
+            e.preventDefault();
+            e.stopPropagation();
+            const cascadeId = row.getAttribute('data-cascade-id');
+            if (cascadeId) window.open('/c/' + cascadeId, '_blank');
           }
         });
       });
@@ -827,10 +919,10 @@ function Get-AntigravitySidebarEnhancementsPayload {
   let scheduleTimer = null;
   function scheduleApply() {
     if (scheduleTimer) return;
-    scheduleTimer = setTimeout(() => {
+    scheduleTimer = requestAnimationFrame(() => {
       scheduleTimer = null;
       applyEnhancements();
-    }, 100);
+    });
   }
 
   const observer = new MutationObserver((mutations) => {
@@ -855,7 +947,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['aria-expanded', 'aria-label', 'title', 'data-title', 'data-testid']
+    attributeFilter: ['aria-expanded', 'aria-label', 'title', 'data-title', 'data-testid', 'style']
   });
 
   window.__GEMINI_PLUS_SIDEBAR_ENHANCEMENTS = {

@@ -12,7 +12,7 @@ function Get-AntigravityComposerTopBarPayload {
   const PROJECT_VAL_ATTR = 'data-gemini-plus-composer-project';
   const PROCESS_BADGE_ATTR = 'data-gemini-plus-composer-process';
   const PROCESS_COUNT_ATTR = 'data-gemini-plus-process-count';
-  const BUILD_VERSION = '2026.09.09.2';
+  const BUILD_VERSION = '2026.09.10.1';
   const STYLE_ID = 'gemini-plus-composer-top-bar-style';
 
   if (window.__GEMINI_PLUS_COMPOSER_TOP_BAR && window.__GEMINI_PLUS_COMPOSER_TOP_BAR.observer) {
@@ -98,8 +98,7 @@ function Get-AntigravityComposerTopBarPayload {
 
       /* Hide redundant native empty-state project selector above composer */
       .no-focus-agent-input:has([data-testid="project-selector-trigger"]),
-      .no-focus-agent-input:has(button[aria-label*="Select project" i]),
-      .no-focus-agent-input:has(button[aria-haspopup="menu"]) {
+      .no-focus-agent-input:has(button[aria-label*="Select project" i]) {
         position: absolute !important;
         opacity: 0 !important;
         pointer-events: none !important;
