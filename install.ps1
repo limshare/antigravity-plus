@@ -138,7 +138,7 @@ if (-not (Test-Path $stageDir)) {
     New-Item -Path $stageDir -ItemType Directory -Force | Out-Null
 }
 
-$repoBase = "https://raw.githubusercontent.com/limudim972/antigravity-plus/main"
+$repoBase = "https://raw.githubusercontent.com/limshare/antigravity-plus/main"
 $files = @(
     'patch.ps1',
     'src/shared/logging.ps1',

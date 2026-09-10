@@ -85,30 +85,6 @@ If Antigravity is already running and you want to re-inject or refresh enhanceme
 powershell.exe -ExecutionPolicy Bypass -File .\patch.ps1 -LiveInject
 ```
 
-### Interactive Menu
-
-Run `patch.ps1` without arguments to access the interactive management menu:
-
-```powershell
-powershell.exe -ExecutionPolicy Bypass -File .\patch.ps1
-```
-
-```text
-==========================================================
-                ANTIGRAVITY PLUS                          
-     Enhanced Runtime & RTL Layer for Antigravity         
-==========================================================
-
-Antigravity Desktop: Found (v2.12.2)
-Active Session:      Running (Port 52467)
-
-  1. Patch / Install Antigravity Plus *
-  2. Live Inject into Running Antigravity
-  3. Launch Antigravity Plus
-  4. Restore Antigravity Plus
-  5. Exit
-```
-
 ### Restore / Uninstall
 
 To remove Antigravity Plus shortcuts and restore original defaults:

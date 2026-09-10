@@ -5,6 +5,7 @@ param(
     [switch]$Launch,
     [switch]$ShowLaunchSplash,
     [switch]$LiveInject,
+    [switch]$Menu,
     [AllowEmptyString()][string]$LauncherKey,
     [int]$Port = 0,
     [switch]$Silent,
@@ -73,5 +74,11 @@ if ($LiveInject) {
     exit 0
 }
 
-# Default interactive menu
-Show-AntigravityPlusMenu
+if ($Menu) {
+    Show-AntigravityPlusMenu
+    exit 0
+}
+
+# Default action: Install and create desktop/start menu shortcuts
+Install-AntigravityPlus
+exit 0
