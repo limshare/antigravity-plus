@@ -16,12 +16,16 @@ function Show-AntigravityPlusMenu {
         Write-Host "Active Session:      " -NoNewline
         Write-Host "Not Running" -ForegroundColor Gray
     }
-    Write-Host ""
+    $state = Read-AntigravityPlusState
+    $updateStatus = if ($state -and $state.NoUpdate -eq $true) { "Disabled (-NoUpdate)" } else { "Enabled (GitHub)" }
+    Write-Host "Auto-Update:         " -NoNewline
+    Write-Host $updateStatus -ForegroundColor Cyan
 
     $choices = @(
         "Patch / Install Antigravity Plus",
         "Live Inject into Running Antigravity",
         "Launch Antigravity Plus",
+        "Check for Updates / Update from GitHub",
         "Restore Antigravity Plus",
         "Clean Orphaned Background Processes",
         "Exit"
@@ -40,13 +44,16 @@ function Show-AntigravityPlusMenu {
             Launch-AntigravityPlus
         }
         4 {
-            Restore-AntigravityPlus
+            Update-AntigravityPlus -Force
         }
         5 {
+            Restore-AntigravityPlus
+        }
+        6 {
             $count = Clear-AntigravityOrphanedProcesses
             Write-Success "Cleaned up $count orphaned background process(es)."
         }
-        6 {
+        7 {
             Write-Host "Exiting." -ForegroundColor Gray
             return
         }

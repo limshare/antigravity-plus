@@ -1,4 +1,8 @@
 function Install-AntigravityPlus {
+    param(
+        [switch]$NoUpdate
+    )
+
     $installInfo = Get-AntigravityInstallInfo
     if (-not $installInfo.Installed) {
         throw 'Antigravity was not found on this system.'
@@ -25,7 +29,7 @@ function Install-AntigravityPlus {
     $ownedShortcuts = @(Install-AntigravityPlusShortcuts -PatchScriptPath $runtimePatchScript -ExeIconPath $installInfo.ExePath)
 
     $activePort = Get-AntigravityActiveDevToolsPort
-    $state = New-AntigravityPlusState -InstallInfo $installInfo -Port $activePort -OwnedShortcuts $ownedShortcuts
+    $state = New-AntigravityPlusState -InstallInfo $installInfo -Port $activePort -OwnedShortcuts $ownedShortcuts -NoUpdate:$NoUpdate
     Save-AntigravityPlusState -State $state
 
     Write-Success "Antigravity Plus installed successfully!"

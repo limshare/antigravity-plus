@@ -28,7 +28,9 @@ function New-AntigravityPlusState {
     param(
         [Parameter(Mandatory)]$InstallInfo,
         [int]$Port = 0,
-        [string[]]$OwnedShortcuts = @()
+        [string[]]$OwnedShortcuts = @(),
+        [string]$LastCommitSha = '',
+        [switch]$NoUpdate
     )
 
     return [pscustomobject]@{
@@ -37,6 +39,10 @@ function New-AntigravityPlusState {
         AppExe = $InstallInfo.ExePath
         Port = $Port
         OwnedShortcuts = @($OwnedShortcuts)
+        NoUpdate = [bool]$NoUpdate
+        LastCommitSha = $LastCommitSha
+        LastUpdateCheck = [DateTimeOffset]::Now.ToString('o')
+        LastUpdated = [DateTimeOffset]::Now.ToString('o')
         CreatedAt = [DateTimeOffset]::Now.ToString('o')
         UpdatedAt = [DateTimeOffset]::Now.ToString('o')
     }

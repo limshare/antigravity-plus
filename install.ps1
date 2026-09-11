@@ -2,7 +2,8 @@
 param(
     [switch]$LocalDev,
     [ValidateRange(1024, 65535)]
-    [int]$Port = 0
+    [int]$Port = 0,
+    [switch]$NoUpdate
 )
 
 function Test-InstallerPortAvailable {
@@ -126,7 +127,7 @@ $LocalRepoRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Get-Location }
 
 if ($LocalDev -or (Test-Path -LiteralPath (Join-Path $LocalRepoRoot 'patch.ps1'))) {
     Write-Host "Launching local Antigravity Plus installer..." -ForegroundColor Green
-    & (Join-Path $LocalRepoRoot 'patch.ps1') -Install
+    & (Join-Path $LocalRepoRoot 'patch.ps1') -Install -NoUpdate:$NoUpdate
     Write-Host "Antigravity Plus installer finished." -ForegroundColor Green
     Start-AntigravityPlusAfterInstall -Port $requestedPort
     exit 0
@@ -158,6 +159,7 @@ $files = @(
     'src/runtime/shortcuts.ps1',
     'src/runtime/launch.ps1',
     'src/runtime/patching.ps1',
+    'src/runtime/updater.ps1',
     'src/ui/menu.ps1'
 )
 
@@ -173,5 +175,6 @@ foreach ($f in $files) {
 }
 
 $downloadedPatch = Join-Path $stageDir 'patch.ps1'
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $downloadedPatch -Install
+$updateArgs = if ($NoUpdate) { @('-NoUpdate') } else { @() }
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $downloadedPatch -Install @updateArgs
 Start-AntigravityPlusAfterInstall -Port $requestedPort

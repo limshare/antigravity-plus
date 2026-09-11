@@ -75,7 +75,28 @@ powershell.exe -ExecutionPolicy Bypass -File .\patch.ps1 -Install
 
 ---
 
-## Usage & Commands
+### Automatic & Manual Updates
+
+Antigravity Plus **automatically updates to the latest version from GitHub by default** every time you launch it.
+
+- **Install with Auto-Update disabled:**
+  ```powershell
+  powershell.exe -ExecutionPolicy Bypass -File .\patch.ps1 -Install -NoUpdate
+  ```
+  *(Or run `.\install.ps1 -NoUpdate` or `.\AntigravityPlus-Setup.exe -NoUpdate`)*
+
+- **Check or Force an Immediate Update:**
+  ```powershell
+  powershell.exe -ExecutionPolicy Bypass -File .\patch.ps1 -Update
+  ```
+- **Launch without Auto-Updating (via Flag):**
+  ```powershell
+  powershell.exe -ExecutionPolicy Bypass -File .\patch.ps1 -Launch -NoUpdate
+  ```
+- **Disable Auto-Update globally via Environment Variable:**
+  ```powershell
+  $env:ANTIGRAVITY_PLUS_NO_UPDATE = '1'
+  ```
 
 ### Live Injection (No Restart Needed)
 

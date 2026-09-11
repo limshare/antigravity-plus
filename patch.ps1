@@ -3,13 +3,15 @@ param(
     [switch]$Install,
     [switch]$Restore,
     [switch]$Launch,
+    [switch]$Update,
     [switch]$ShowLaunchSplash,
     [switch]$LiveInject,
     [switch]$Menu,
     [AllowEmptyString()][string]$LauncherKey,
     [int]$Port = 0,
     [switch]$Silent,
-    [switch]$SkipMain
+    [switch]$SkipMain,
+    [switch]$NoUpdate
 )
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -33,6 +35,7 @@ $modules = @(
     'src\runtime\shortcuts.ps1',
     'src\runtime\launch.ps1',
     'src\runtime\patching.ps1',
+    'src\runtime\updater.ps1',
     'src\ui\menu.ps1'
 )
 
@@ -54,8 +57,13 @@ if ($SkipMain) {
 }
 
 # Process command-line flags
+if ($Update) {
+    Update-AntigravityPlus -Force
+    exit 0
+}
+
 if ($Install) {
-    Install-AntigravityPlus
+    Install-AntigravityPlus -NoUpdate:$NoUpdate
     exit 0
 }
 
@@ -65,7 +73,7 @@ if ($Restore) {
 }
 
 if ($Launch) {
-    Launch-AntigravityPlus -PreferredPort $Port -LauncherKey $LauncherKey
+    Launch-AntigravityPlus -PreferredPort $Port -LauncherKey $LauncherKey -NoUpdate:$NoUpdate
     exit 0
 }
 
@@ -80,5 +88,5 @@ if ($Menu) {
 }
 
 # Default action: Install and create desktop/start menu shortcuts
-Install-AntigravityPlus
+Install-AntigravityPlus -NoUpdate:$NoUpdate
 exit 0

@@ -86,7 +86,17 @@ End If
 If desktopLaunch Then
     shell.Environment("Process")("ANTIGRAVITY_PLUS_DESKTOP_LAUNCH") = "1"
 End If
+noUpdate = False
+For argumentIndex = 0 To WScript.Arguments.Count - 1
+    arg = LCase(WScript.Arguments(argumentIndex))
+    If arg = "--no-update" Or arg = "-noupdate" Or arg = "--noupdate" Or arg = "/noupdate" Then
+        noUpdate = True
+    End If
+Next
 command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " & Chr(34) & "$escapedPatchScriptPath" & Chr(34) & " -Launch"
+If noUpdate Or shell.Environment("Process")("ANTIGRAVITY_PLUS_NO_UPDATE") = "1" Then
+    command = command & " -NoUpdate"
+End If
 launchSplashCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " & Chr(34) & "$escapedPatchScriptPath" & Chr(34) & " -ShowLaunchSplash"
 If preferredPort > 0 Then
     command = command & " -Port " & CStr(preferredPort)

@@ -782,8 +782,18 @@ function Launch-AntigravityPlus {
     param(
         [int]$PreferredPort = 0,
         [AllowEmptyString()][string]$LauncherKey,
-        [switch]$NoMonitor
+        [switch]$NoMonitor,
+        [switch]$NoUpdate
     )
+
+    # Check for update if enabled (default is true unless launched or installed with -NoUpdate or ANTIGRAVITY_PLUS_NO_UPDATE=1)
+    $state = Read-AntigravityPlusState
+    $skipUpdate = $NoUpdate -or ($state -and $state.NoUpdate -eq $true) -or ($env:ANTIGRAVITY_PLUS_NO_UPDATE -eq '1')
+    if (-not $skipUpdate) {
+        try {
+            Invoke-AntigravityPlusStartupUpdate -TargetDirectory (Get-AntigravityPlusRuntimeRoot)
+        } catch {}
+    }
 
     $installInfo = Get-AntigravityInstallInfo
     if (-not $installInfo.Installed) {

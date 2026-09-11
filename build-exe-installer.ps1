@@ -30,8 +30,8 @@ $($payload -join "`r`n")
   `$psi = [Diagnostics.ProcessStartInfo]::new()
   `$psi.FileName = 'powershell.exe'
   `$psi.UseShellExecute = `$false
-  `$scriptPath = Join-Path `$root 'patch.ps1'
-  `$psi.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + `$scriptPath + '" -Install'
+  `$extraArgs = `$args -join ' '
+  `$psi.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + `$scriptPath + '" -Install' + (if (`$extraArgs) { ' ' + `$extraArgs } else { '' })
   `$process = [Diagnostics.Process]::Start(`$psi)
   `$process.WaitForExit()
   if (`$process.ExitCode -ne 0) { throw "Installer exited with code `$(`$process.ExitCode)." }
