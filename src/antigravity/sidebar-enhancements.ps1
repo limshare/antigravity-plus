@@ -536,6 +536,17 @@ function Get-AntigravitySidebarEnhancementsPayload {
   const PROJECT_LOADED_PREFIX = 'antigravity_plus_proj_loaded_';
   const SYNTHETIC_PROJ_PAGER_ATTR = 'data-gemini-plus-project-pager';
 
+  function findProjectPager(inner, projName) {
+    if (!inner) return null;
+    const pagers = inner.querySelectorAll('[' + SYNTHETIC_PROJ_PAGER_ATTR + ']');
+    for (let i = 0; i < pagers.length; i++) {
+      if (pagers[i].getAttribute(SYNTHETIC_PROJ_PAGER_ATTR) === projName) {
+        return pagers[i];
+      }
+    }
+    return null;
+  }
+
   function layoutSidebarVirtualizer(inner, section) {
     if (!inner || !section) return;
 
@@ -559,7 +570,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
       }
     });
 
-    // 1. Group tasks per project and identify native see-all buttons
+    // 1. Group tasks per project and identify native see-all / show-more buttons
     const projectTasks = new Map();
     const projectNativeSeeAll = new Map();
     let activeProjName = null;
@@ -587,12 +598,20 @@ function Get-AntigravitySidebarEnhancementsPayload {
       }
 
       const btn = el.querySelector('button');
-      if (btn && /see all|see less/i.test(btn.innerText || '')) {
+      if (btn && /see\s*all|see\s*less|see\s*more|show\s*more|show\s*less|view\s*all|view\s*more/i.test(btn.innerText || '')) {
         el.setAttribute('data-gemini-native-see-all', 'true');
         el.style.display = 'none';
         if (activeProjName) {
           projectNativeSeeAll.set(activeProjName, btn);
         }
+      }
+    });
+
+    // Clean up any pagers for projects no longer active in this virtual cycle
+    inner.querySelectorAll('[' + SYNTHETIC_PROJ_PAGER_ATTR + ']').forEach(p => {
+      const pName = p.getAttribute(SYNTHETIC_PROJ_PAGER_ATTR);
+      if (!projectTasks.has(pName)) {
+        p.remove();
       }
     });
 
@@ -611,17 +630,19 @@ function Get-AntigravitySidebarEnhancementsPayload {
         }
       });
 
-      let pager = inner.querySelector(`[${SYNTHETIC_PROJ_PAGER_ATTR}="${projName}"]`);
-      if (total > PROJECT_PAGE_SIZE || nativeSeeAll) {
+      let pager = findProjectPager(inner, projName);
+      const hasMore = maxVisible < total;
+      const hasLess = loaded > 0;
+      const showPager = (total > PROJECT_PAGE_SIZE || nativeSeeAll) && (hasMore || hasLess);
+
+      if (showPager) {
         if (!pager) {
           pager = document.createElement('div');
           pager.setAttribute(SYNTHETIC_PROJ_PAGER_ATTR, projName);
           inner.appendChild(pager);
         }
+        pager.style.display = '';
         pager.className = 'w-full flex flex-col gap-[1px] select-none';
-
-        const hasMore = maxVisible < total;
-        const hasLess = loaded > 0;
 
         const nextHtml = `
           <button type="button" data-gemini-plus-proj-action="more" style="display: ${hasMore ? 'flex' : 'none'};" class="relative w-full select-none cursor-pointer rounded-lg flex flex-row group pl-[30px] pr-2 py-1.5 items-center transition-colors text-xs text-muted-foreground hover:bg-sidebar-muted hover:text-foreground border-none bg-transparent font-medium focus:outline-none text-left">Show more</button>
@@ -683,8 +704,8 @@ function Get-AntigravitySidebarEnhancementsPayload {
           projectTasks.forEach((tasks, projName) => {
             const visibleTasks = tasks.filter(t => t.style.display !== 'none');
             if (visibleTasks.length > 0 && visibleTasks[visibleTasks.length - 1] === el) {
-              const pager = inner.querySelector(`[${SYNTHETIC_PROJ_PAGER_ATTR}="${projName}"]`);
-              if (pager) layoutElements.push(pager);
+              const pager = findProjectPager(inner, projName);
+              if (pager && pager.isConnected) layoutElements.push(pager);
             }
           });
         }
@@ -694,6 +715,13 @@ function Get-AntigravitySidebarEnhancementsPayload {
     if (projectsHeaderIdx === -1 && section) {
       layoutElements.unshift(section);
     }
+
+    // Ensure any project pager in inner that is NOT in layoutElements is removed
+    inner.querySelectorAll('[' + SYNTHETIC_PROJ_PAGER_ATTR + ']').forEach(p => {
+      if (!layoutElements.includes(p)) {
+        p.remove();
+      }
+    });
 
     // 4. Position all elements sequentially without layout thrashing
     const heights = layoutElements.map(el => Math.round(el.getBoundingClientRect().height) || el.offsetHeight || 33);
