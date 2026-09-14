@@ -18,21 +18,55 @@ function Install-AntigravityPlusRuntimeFiles {
     param([Parameter(Mandatory)][string]$SourceRoot)
 
     $runtimeRoot = Get-AntigravityPlusRuntimeRoot
-    if (-not (Test-Path -LiteralPath $runtimeRoot)) {
-        New-Item -Path $runtimeRoot -ItemType Directory -Force | Out-Null
+    $runtimeParent = Split-Path -Parent $runtimeRoot
+    if (-not (Test-Path -LiteralPath $runtimeParent)) {
+        New-Item -Path $runtimeParent -ItemType Directory -Force | Out-Null
     }
 
-    # Copy src files into runtime
+    # Stage all runtime files before replacing the active copy.
+    $stageRoot = Join-Path ([IO.Path]::GetTempPath()) ('antigravity-plus-runtime-stage-' + [guid]::NewGuid().ToString('N'))
+    $backupRoot = Join-Path $runtimeParent ('.antigravity-plus-install-backup-' + [guid]::NewGuid().ToString('N'))
+    $stageMoved = $false
+    New-Item -Path $stageRoot -ItemType Directory -Force | Out-Null
+    try {
+        $sourceFiles = @('patch.ps1', 'runtime-manifest.json')
+        foreach ($sourceFile in $sourceFiles) {
+            $sourcePath = Join-Path $SourceRoot $sourceFile
+            if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) { throw "Runtime source file not found: $sourcePath" }
+            Copy-Item -LiteralPath $sourcePath -Destination (Join-Path $stageRoot $sourceFile) -Force
+        }
+
+        # Copy src files into the staging directory.
     $srcSource = Join-Path $SourceRoot 'src'
-    $srcDest = Join-Path $runtimeRoot 'src'
     if (Test-Path -LiteralPath $srcSource) {
-        Copy-Item -Path $srcSource -Destination $runtimeRoot -Recurse -Force | Out-Null
+            Copy-Item -Path $srcSource -Destination $stageRoot -Recurse -Force | Out-Null
     }
 
-    # Copy patch.ps1 into runtime
-    $patchSource = Join-Path $SourceRoot 'patch.ps1'
-    if (Test-Path -LiteralPath $patchSource) {
-        Copy-Item -Path $patchSource -Destination $runtimeRoot -Force | Out-Null
+        foreach ($file in @(Get-ChildItem -LiteralPath $stageRoot -Recurse -File)) {
+            if ($file.Length -le 0) { throw "Staged runtime file is empty: $($file.FullName)" }
+            if ($file.Extension -ieq '.ps1') {
+                $tokens = $null; $errors = $null
+                [Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+                if (@($errors).Count -gt 0) { throw "Staged runtime PowerShell file failed validation: $($file.FullName)" }
+            }
+        }
+
+        if (Test-Path -LiteralPath $runtimeRoot) { Move-Item -LiteralPath $runtimeRoot -Destination $backupRoot -Force }
+        Move-Item -LiteralPath $stageRoot -Destination $runtimeRoot -Force
+        $stageRoot = $null
+        $stageMoved = $true
+        if (Test-Path -LiteralPath $backupRoot) { Remove-Item -LiteralPath $backupRoot -Recurse -Force }
+    } catch {
+        if ($stageMoved -and (Test-Path -LiteralPath $runtimeRoot)) { Remove-Item -LiteralPath $runtimeRoot -Recurse -Force -ErrorAction SilentlyContinue }
+        if (Test-Path -LiteralPath $backupRoot) {
+            try { Move-Item -LiteralPath $backupRoot -Destination $runtimeRoot -Force -ErrorAction Stop }
+            catch { Write-Warn "Antigravity Plus install rollback could not restore the previous runtime: $($_.Exception.Message)" }
+        }
+        throw
+    } finally {
+        if ($stageRoot -and (Test-Path -LiteralPath $stageRoot)) {
+            Remove-Item -LiteralPath $stageRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 
     return $runtimeRoot

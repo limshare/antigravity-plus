@@ -79,6 +79,8 @@ powershell.exe -ExecutionPolicy Bypass -File .\patch.ps1 -Install
 
 Antigravity Plus **automatically updates to the latest version from GitHub by default** every time you launch it.
 
+Updates are pinned to one Git commit, downloaded into a staging directory, checked against the published SHA-256 manifest, and activated with a rollback copy. If validation or activation fails, the previous runtime is restored and launch continues with the existing copy.
+
 - **Install with Auto-Update disabled:**
   ```powershell
   powershell.exe -ExecutionPolicy Bypass -File .\patch.ps1 -Install -NoUpdate

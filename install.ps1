@@ -160,7 +160,8 @@ $files = @(
     'src/runtime/launch.ps1',
     'src/runtime/patching.ps1',
     'src/runtime/updater.ps1',
-    'src/ui/menu.ps1'
+    'src/ui/menu.ps1',
+    'runtime-manifest.json'
 )
 
 Write-Host "Downloading Antigravity Plus components..." -ForegroundColor Cyan
