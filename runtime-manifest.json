@@ -5,8 +5,8 @@
                   {
                       "path":  "patch.ps1",
                       "target":  "patch.ps1",
-                      "size":  2019,
-                      "sha256":  "d786baa5e7036f80862b27846f98a65cd6ecac5b87f483d699097f253b9b0ded"
+                      "size":  2315,
+                      "sha256":  "92a09b8cbaffe46fc7c0383eae91bf9714ebe2ba17b4a2ce2ce4bf7272a37f3e"
                   },
                   {
                       "path":  "src/shared/logging.ps1",
@@ -87,6 +87,12 @@
                       "sha256":  "5cc5067a2183a9c12a305164db2f16e9bb666a7b068446e5135604255c283483"
                   },
                   {
+                      "path":  "src/runtime/reply-language.ps1",
+                      "target":  "src/runtime/reply-language.ps1",
+                      "size":  1174,
+                      "sha256":  "f75ced25c2e0d8c7c38aa7058f9e40f317d85c2a759d7c86a52796895ce67deb"
+                  },
+                  {
                       "path":  "src/runtime/state.ps1",
                       "target":  "src/runtime/state.ps1",
                       "size":  2007,
@@ -107,8 +113,8 @@
                   {
                       "path":  "src/runtime/patching.ps1",
                       "target":  "src/runtime/patching.ps1",
-                      "size":  3563,
-                      "sha256":  "e3c75ee449e0b7ee1cb4112f0359a603e8cfafb9cbc31416bb72712ee642ba45"
+                      "size":  3713,
+                      "sha256":  "5858e2c8b847845c927b9bae19a16148776b2813a0cd6b8fb2dfb5f20d3bc86a"
                   },
                   {
                       "path":  "src/runtime/updater.ps1",

@@ -1,5 +1,7 @@
 function Install-AntigravityPlus {
     param(
+        [ValidateSet('Hebrew', 'Off')]
+        [string]$ReplyLanguage = 'Hebrew',
         [switch]$NoUpdate
     )
 
@@ -31,6 +33,8 @@ function Install-AntigravityPlus {
     $activePort = Get-AntigravityActiveDevToolsPort
     $state = New-AntigravityPlusState -InstallInfo $installInfo -Port $activePort -OwnedShortcuts $ownedShortcuts -NoUpdate:$NoUpdate
     Save-AntigravityPlusState -State $state
+
+    Set-AntigravityPlusReplyLanguage -ReplyLanguage $ReplyLanguage
 
     Write-Success "Antigravity Plus installed successfully!"
     Write-Success "Created $($ownedShortcuts.Count) shortcut(s):"

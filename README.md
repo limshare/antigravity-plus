@@ -75,6 +75,29 @@ powershell.exe -ExecutionPolicy Bypass -File .\patch.ps1 -Install
 
 ---
 
+### Installer Options (EXE & PowerShell)
+
+Both installers support the same options and run without configuration questions:
+
+| Option | Default | Effect |
+| :--- | :--- | :--- |
+| `-NoUpdate` | Automatic updates enabled | Saves automatic updates as disabled for subsequent shortcut launches. |
+| `-ReplyLanguage Hebrew` | Hebrew | Adds the Plus instruction to reply in Hebrew. |
+| `-ReplyLanguage Off` | — | Removes only the Plus language instruction; does not force English or remove your own rules. |
+
+```powershell
+.\AntigravityPlus-Setup.exe -NoUpdate
+.\AntigravityPlus-Setup.exe -ReplyLanguage Off
+.\AntigravityPlus-Setup.exe -NoUpdate -ReplyLanguage Off
+powershell.exe -ExecutionPolicy Bypass -File .\install.ps1 -NoUpdate -ReplyLanguage Off
+```
+
+For a local checkout, add `-LocalDev` to `install.ps1`. The packaged EXE uses its embedded files automatically.
+
+The language instruction is stored in a marked block in `%USERPROFILE%\\.gemini\\GEMINI.md`, the [global rules file](https://antigravity.google/docs/rules-workflows). Existing rules are preserved. `Off` removes the marked block and remains in effect on later launches. Use `patch.ps1 -Launch -ReplyLanguage Hebrew` or `patch.ps1 -Launch -ReplyLanguage Off` to change it during launch.
+
+---
+
 ### Automatic & Manual Updates
 
 Antigravity Plus **automatically updates to the latest version from GitHub by default** every time you launch it.

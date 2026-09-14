@@ -5,7 +5,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 if ([string]::IsNullOrWhiteSpace($OutputPath)) { $OutputPath = Join-Path $root 'dist\AntigravityPlus-Setup.exe' }
 $stage = Join-Path $env:TEMP ("antigravity-plus-build-" + [guid]::NewGuid().ToString('N'))
 $wrapper = Join-Path $stage 'setup-wrapper.ps1'
-$files = @('install.ps1','patch.ps1') + @(Get-ChildItem (Join-Path $root 'src') -Recurse -File | ForEach-Object { $_.FullName.Substring($root.Length + 1) })
+$files = @('install.ps1','patch.ps1','runtime-manifest.json') + @(Get-ChildItem (Join-Path $root 'src') -Recurse -File | ForEach-Object { $_.FullName.Substring($root.Length + 1) })
 
 try {
   New-Item -ItemType Directory -Force $stage | Out-Null
@@ -15,6 +15,11 @@ try {
     "  @{ Path = '$relative'; Data = '$encoded' }"
   }
   @"
+param(
+  [ValidateSet('Hebrew', 'Off')]
+  [string]`$ReplyLanguage = 'Hebrew',
+  [switch]`$NoUpdate
+)
 `$ErrorActionPreference = 'Stop'
 `$root = Join-Path `$env:TEMP ('AntigravityPlus-Setup-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force `$root | Out-Null
@@ -30,8 +35,10 @@ $($payload -join "`r`n")
   `$psi = [Diagnostics.ProcessStartInfo]::new()
   `$psi.FileName = 'powershell.exe'
   `$psi.UseShellExecute = `$false
-  `$extraArgs = `$args -join ' '
-  `$psi.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + `$scriptPath + '" -Install' + (if (`$extraArgs) { ' ' + `$extraArgs } else { '' })
+  `$scriptPath = Join-Path `$root 'install.ps1'
+  `$installerArguments = '-NoProfile -ExecutionPolicy Bypass -File "' + `$scriptPath + '" -LocalDev -ReplyLanguage ' + `$ReplyLanguage
+  if (`$NoUpdate) { `$installerArguments += ' -NoUpdate' }
+  `$psi.Arguments = `$installerArguments
   `$process = [Diagnostics.Process]::Start(`$psi)
   `$process.WaitForExit()
   if (`$process.ExitCode -ne 0) { throw "Installer exited with code `$(`$process.ExitCode)." }
@@ -40,8 +47,6 @@ $($payload -join "`r`n")
   Write-Host ''
   Write-Host 'Antigravity Plus installation failed:' -ForegroundColor Red
   Write-Host `$_.Exception.Message -ForegroundColor Yellow
-  Write-Host ''
-  Read-Host 'Press Enter to close'
   exit 1
 } finally { Remove-Item `$root -Recurse -Force -ErrorAction SilentlyContinue }
 "@ | Set-Content $wrapper -Encoding UTF8

@@ -11,6 +11,8 @@ param(
     [int]$Port = 0,
     [switch]$Silent,
     [switch]$SkipMain,
+    [ValidateSet('Hebrew', 'Off')]
+    [string]$ReplyLanguage = 'Hebrew',
     [switch]$NoUpdate
 )
 
@@ -32,6 +34,7 @@ $modules = @(
     'src\antigravity\payload-bundle.ps1',
     'src\runtime\files.ps1',
     'src\runtime\state.ps1',
+    'src\runtime\reply-language.ps1',
     'src\runtime\shortcuts.ps1',
     'src\runtime\launch.ps1',
     'src\runtime\patching.ps1',
@@ -63,7 +66,7 @@ if ($Update) {
 }
 
 if ($Install) {
-    Install-AntigravityPlus -NoUpdate:$NoUpdate
+    Install-AntigravityPlus -ReplyLanguage $ReplyLanguage -NoUpdate:$NoUpdate
     exit 0
 }
 
@@ -73,6 +76,7 @@ if ($Restore) {
 }
 
 if ($Launch) {
+    if ($PSBoundParameters.ContainsKey('ReplyLanguage')) { Set-AntigravityPlusReplyLanguage -ReplyLanguage $ReplyLanguage }
     Launch-AntigravityPlus -PreferredPort $Port -LauncherKey $LauncherKey -NoUpdate:$NoUpdate
     exit 0
 }
@@ -88,5 +92,5 @@ if ($Menu) {
 }
 
 # Default action: Install and create desktop/start menu shortcuts
-Install-AntigravityPlus -NoUpdate:$NoUpdate
+Install-AntigravityPlus -ReplyLanguage $ReplyLanguage -NoUpdate:$NoUpdate
 exit 0
