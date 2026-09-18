@@ -64,7 +64,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
         if (!node || !node.nodeValue) return NodeFilter.FILTER_REJECT;
         const parent = node.parentElement;
         if (!parent) return NodeFilter.FILTER_REJECT;
-        if (parent.closest('[' + SYNTHETIC_SECTION_ATTR + ']') || parent.closest('.monaco-editor') || parent.closest('[data-testid="conversation-view"]')) {
+        if (parent.closest('[' + SYNTHETIC_SECTION_ATTR + ']') || parent.closest('.monaco-editor') || parent.closest('[data-testid="conversation-view"]') || parent.closest('[data-gemini-plus-composer-top-bar]')) {
           return NodeFilter.FILTER_REJECT;
         }
         if (/conversation|chat|task|pinned|pin|archive|history/i.test(node.nodeValue)) {
@@ -94,7 +94,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
 
     const elementsWithAttributes = root.querySelectorAll ? root.querySelectorAll(selector) : [];
     elementsWithAttributes.forEach(el => {
-      if (el.closest('[' + SYNTHETIC_SECTION_ATTR + ']')) return;
+      if (el.closest('[' + SYNTHETIC_SECTION_ATTR + ']') || el.closest('[data-gemini-plus-composer-top-bar]')) return;
       ['aria-label', 'title', 'data-title', 'placeholder', 'data-tooltip'].forEach(attr => {
         const val = el.getAttribute(attr);
         if (val) {
@@ -551,7 +551,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
 
     const allTasks = Array.from(catalogMap.values()).map(t => {
       let resolvedProject = t.projectName;
-      if (!resolvedProject || /^[0-9a-f-]{36}$/i.test(resolvedProject)) {
+      if (resolvedProject && /^[0-9a-f-]{36}$/i.test(resolvedProject)) {
         resolvedProject = projectMap.get(resolvedProject) || null;
       }
       return {
@@ -894,7 +894,10 @@ function Get-AntigravitySidebarEnhancementsPayload {
       isCollapsed,
       loaded,
       currentPath,
-      visibleRecents.map(t => `${t.cascadeId}:${t.title}:${t.projectName}:${t.relativeTime}:${workingSet.has(t.cascadeId)}:${unreadSet.has(t.cascadeId)}`).join('|')
+      visibleRecents.map(t => {
+        const projectLabel = (t.projectName && !/^(conversations?|tasks?)$/i.test(t.projectName)) ? t.projectName : 'task';
+        return `${t.cascadeId}:${t.title}:${projectLabel}:${t.relativeTime}:${workingSet.has(t.cascadeId)}:${unreadSet.has(t.cascadeId)}`;
+      }).join('|')
     ].join(';;');
 
     if (list.__renderSignature !== renderSignature) {
@@ -904,7 +907,8 @@ function Get-AntigravitySidebarEnhancementsPayload {
       const rowsHtml = visibleRecents.map(t => {
         const isActive = currentPath.includes(t.cascadeId);
         const activeClasses = isActive ? 'bg-sidebar-secondary text-foreground' : 'text-secondary-foreground hover:bg-sidebar-muted hover:text-foreground';
-        const displayTitle = t.projectName ? `${t.title} (${t.projectName})` : t.title;
+        const projectLabel = (t.projectName && !/^(conversations?|tasks?)$/i.test(t.projectName)) ? t.projectName : 'task';
+        const displayTitle = t.title.endsWith(` (${projectLabel})`) ? t.title : `${t.title} (${projectLabel})`;
 
         const isWorking = workingSet.has(t.cascadeId);
         const isUnread = !isWorking && unreadSet.has(t.cascadeId);
