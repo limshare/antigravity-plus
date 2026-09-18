@@ -65,8 +65,8 @@
                   {
                       "path":  "src/antigravity/sidebar-enhancements.ps1",
                       "target":  "src/antigravity/sidebar-enhancements.ps1",
-                      "size":  40122,
-                      "sha256":  "5f14cafcd30474eb4bf8e5654ad97713759a462c55e2e3eea25c389f9bb51c52"
+                      "size":  40019,
+                      "sha256":  "8641dd9c1eba66180d0acfe15670f18bf4b2c2ac73c8c91512d550bde31008c2"
                   },
                   {
                       "path":  "src/antigravity/composer-top-bar.ps1",

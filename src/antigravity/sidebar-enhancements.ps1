@@ -779,7 +779,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
         <h2 class="text-xs opacity-50 font-medium select-none m-0 min-w-0 flex items-center">
           <button type="button" aria-expanded="${!isCollapsed}" class="flex min-w-0 items-center gap-0.5 border-none bg-transparent p-0 text-left cursor-pointer font-inherit text-inherit rounded">
             <span class="truncate">Recents</span>
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 -960 960 960" fill="currentColor" class="recents-chevron shrink-0 transition-[opacity,transform] duration-150 ${isCollapsed ? '' : 'rotate-90'} opacity-0 group-hover/section-header:opacity-50 group-focus-within/section-header:opacity-50">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 -960 960 960" fill="currentColor" class="recents-chevron shrink-0 transition-transform duration-150 ${isCollapsed ? '' : 'rotate-90'}">
               <path d="M517.85-480l-184-184L376-706.15L602.15-480L376-253.85L333.85-296l184-184Z"></path>
             </svg>
           </button>
