@@ -41,20 +41,20 @@
                   {
                       "path":  "src/antigravity/rtl-shared.ps1",
                       "target":  "src/antigravity/rtl-shared.ps1",
-                      "size":  6236,
-                      "sha256":  "52ae7da52aaa9091260c2afae16b8bdc5a0e1b09b088534d88a5ec745c52ba02"
+                      "size":  6613,
+                      "sha256":  "8d41c0751213c237584d7e57300ec2e0e1777736b889501a6349ee2fd9a08288"
                   },
                   {
                       "path":  "src/antigravity/rtl-payload.ps1",
                       "target":  "src/antigravity/rtl-payload.ps1",
-                      "size":  9667,
-                      "sha256":  "cafc95d1337684dc476f5353a8be23a508a9375d5f18624f9425984028c89ab4"
+                      "size":  23408,
+                      "sha256":  "76a61c027f35889b50d9b4cb0a7b1ac109694c9b6b61a75773291c1e5ad3399d"
                   },
                   {
                       "path":  "src/antigravity/ui-enhancements.ps1",
                       "target":  "src/antigravity/ui-enhancements.ps1",
-                      "size":  7927,
-                      "sha256":  "5c6859e05f3dbef7bae7d94f9be807a65dcaff4dd9935ea06e7a15113e53246c"
+                      "size":  13753,
+                      "sha256":  "638b11fdfed33b9e6ea2c2475dc5cc5aa2e6aa76e46ba6456f18025b95202174"
                   },
                   {
                       "path":  "src/antigravity/context-badge.ps1",
@@ -65,14 +65,14 @@
                   {
                       "path":  "src/antigravity/sidebar-enhancements.ps1",
                       "target":  "src/antigravity/sidebar-enhancements.ps1",
-                      "size":  43261,
-                      "sha256":  "f9316a955dc1d27bc8315a5a44af44a35bff17218a16460ce56b3e2844709a32"
+                      "size":  43667,
+                      "sha256":  "8302f8d9c0e91f38ea05f500be7fbc061d8d5d1541f251df2c6e8ba32a5010cb"
                   },
                   {
                       "path":  "src/antigravity/composer-top-bar.ps1",
                       "target":  "src/antigravity/composer-top-bar.ps1",
-                      "size":  38570,
-                      "sha256":  "44c12fd48ecad26a7007f3b3aeb4c62c3f022c17b3d500315e201dd18ac51a51"
+                      "size":  40023,
+                      "sha256":  "baf92e15de581d47528e2891cd26c27fcdf8eab60a9ce36a1ba1cca416f980da"
                   },
                   {
                       "path":  "src/antigravity/new-window-button.ps1",
