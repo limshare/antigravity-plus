@@ -99,10 +99,12 @@ function Get-AntigravityRtlSharedHelpers {
   }
 
   function stripDiagnosticPrefix(text) {
-    return normalizeText(text)
-      .replace(/^[A-Z]\d{2}\.\s*[^:\n]{1,80}:\s*/u, '')
-      .replace(/^\d{1,3}\.\s*[^:\n]{1,80}:\s*/u, '')
-      .trim();
+    const normalized = normalizeText(text);
+    const match = normalized.match(/^([A-Z]\d{1,3}|\d{1,3})\.\s*([^:\n]{1,80}):\s*/u);
+    if (match && !hasRtlCodePoint(match[2])) {
+      return normalized.slice(match[0].length).trim();
+    }
+    return normalized;
   }
 
   function getMeaningfulText(input, skipSelector) {
@@ -128,6 +130,12 @@ function Get-AntigravityRtlSharedHelpers {
     if (hasRtlCodePoint(normalized)) return 'rtl';
 
     return 'ltr';
+  }
+
+  function classifyProseDirection(input, skipSelector) {
+    const normalized = getMeaningfulText(input, skipSelector);
+    if (!normalized) return null;
+    return proseDirection(normalized) || classifyDirection(input, skipSelector);
   }
 
   function cellDirection(text) {
@@ -164,6 +172,7 @@ function Get-AntigravityRtlSharedHelpers {
       stripDiagnosticPrefix,
       getMeaningfulText,
       classifyDirection,
+      classifyProseDirection,
       hasRtlCodePoint,
       isRtlCodePoint,
       firstStrongDirection,

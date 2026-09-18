@@ -18,6 +18,11 @@ $rtlPayload = Get-AntigravityRtlPayload
 Assert-True ($rtlPayload.Contains('unicode-bidi: isolate !important;')) 'RTL style should use isolate bidi mode.'
 Assert-True ($rtlPayload.Contains('table[data-agy-rtl="rtl"]')) 'RTL payload should include table direction selector.'
 Assert-True ($rtlPayload.Contains('processTable')) 'RTL payload should include table processing.'
+Assert-True ($rtlPayload.Contains('processLists')) 'RTL payload should include list processing.'
+Assert-True ($rtlPayload.Contains('processArtifactCards')) 'RTL payload should include artifact card processing.'
+Assert-True ($rtlPayload.Contains('.artifact-card[data-agy-rtl="rtl"]')) 'RTL payload should include artifact card style selector.'
+Assert-True ($rtlPayload.Contains('ensureMixedLtrTail')) 'RTL payload should include mixed LTR tail isolation.'
+Assert-True ($rtlPayload.Contains('data-agy-rtl-ltr-tail')) 'RTL payload should include LTR tail selector.'
 
 $nodeCommand = Get-Command -Name node -ErrorAction SilentlyContinue
 if ($nodeCommand) {
@@ -37,6 +42,11 @@ if (helpers.classifyDirection('Hello world') !== 'ltr') throw new Error('Expecte
 if (helpers.classifyDirection('שלום עולם') !== 'rtl') throw new Error('Expected "rtl" for pure Hebrew');
 if (helpers.classifyDirection('Please review שלום world') !== 'rtl') throw new Error('Expected "rtl" for mixed sentence containing Hebrew');
 if (helpers.classifyDirection('נוסף מרווח תחת Projects.') !== 'rtl') throw new Error('Expected "rtl" for Hebrew with English token');
+if (helpers.classifyDirection('1. בממשק המשתמש (UI):') !== 'rtl') throw new Error('Expected "rtl" for Hebrew numbered header');
+if (helpers.classifyProseDirection('1. בממשק המשתמש (UI):') !== 'rtl') throw new Error('Expected "rtl" prose for Hebrew numbered header');
+if (!helpers.hasMixedTerminalLtrTail('1. בממשק המשתמש (UI):')) throw new Error('Expected mixed terminal LTR tail for (UI):');
+if (helpers.stripDiagnosticPrefix('E01. System error: בדיקה עברה') !== 'בדיקה עברה') throw new Error('Expected English diagnostic prefix to be stripped');
+if (helpers.stripDiagnosticPrefix('1. בממשק המשתמש (UI):') !== '1. בממשק המשתמש (UI):') throw new Error('Expected Hebrew numbered header not to be stripped as diagnostic');
 
 // Test proseDirection
 if (helpers.proseDirection('Hello world') !== 'ltr') throw new Error('Expected "ltr" prose for English');
