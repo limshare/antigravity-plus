@@ -12,7 +12,7 @@ function Get-AntigravityComposerTopBarPayload {
   const PROJECT_VAL_ATTR = 'data-gemini-plus-composer-project';
   const PROCESS_BADGE_ATTR = 'data-gemini-plus-composer-process';
   const PROCESS_COUNT_ATTR = 'data-gemini-plus-process-count';
-  const BUILD_VERSION = '2026.09.10.1';
+  const BUILD_VERSION = '2026.09.18.2';
   const STYLE_ID = 'gemini-plus-composer-top-bar-style';
 
   if (window.__GEMINI_PLUS_COMPOSER_TOP_BAR && window.__GEMINI_PLUS_COMPOSER_TOP_BAR.observer) {
@@ -123,89 +123,123 @@ function Get-AntigravityComposerTopBarPayload {
     return String(text || '').replace(/\s+/g, ' ').trim();
   }
 
-  function currentProjectName() {
-    // 0. Resolve from live project selector trigger if present (in new chat / empty state)
-    const nativeTrigger = document.querySelector('[data-testid="project-selector-trigger"], button[aria-label*="Select project" i]');
-    if (nativeTrigger) {
-      const span = nativeTrigger.querySelector('span');
-      const val = normalizeText(span ? span.textContent : nativeTrigger.textContent);
-      if (val) {
-        try { sessionStorage.setItem('antigravity_plus_last_project', val); } catch (e) {}
-        return val;
-      }
-    }
+  function isGenericTaskOrChat(text) {
+    if (!text) return true;
+    const clean = String(text).trim().toLowerCase();
+    return clean === 'new chat' || clean === 'new task' || clean === 'new conversation' ||
+           clean === 'chat' || clean === 'task' || clean === 'conversation' ||
+           clean === 'select project' || clean === 'no project' || clean === 'workspace';
+  }
 
-    const breadcrumb = document.querySelector('[data-testid="breadcrumb-segment"]');
-    if (breadcrumb) {
-      const val = normalizeText(breadcrumb.textContent);
-      if (val && !val.toLowerCase().includes('chat') && !val.toLowerCase().includes('task')) {
-        try { sessionStorage.setItem('antigravity_plus_last_project', val); } catch (e) {}
-        return val;
-      }
-    }
+  function getProjectMap() {
+    const map = {};
+    try {
+      const cached = JSON.parse(localStorage.getItem('antigravity_plus_project_names') || '{}');
+      Object.assign(map, cached);
+    } catch (e) {}
 
-    // 1. Resolve from sidebar React Fiber items
     const sidebar = document.querySelector('[data-testid="conversation-list-sidebar"]');
     if (sidebar) {
       const fiberKey = Object.keys(sidebar).find((k) => k.startsWith('__reactFiber$'));
       if (fiberKey) {
         let fiber = sidebar[fiberKey];
-        let items = null;
         while (fiber) {
-          if (fiber.memoizedProps && fiber.memoizedProps.items) {
-            items = fiber.memoizedProps.items;
+          if (fiber.memoizedProps && fiber.memoizedProps.items && Array.isArray(fiber.memoizedProps.items)) {
+            fiber.memoizedProps.items.forEach((i) => {
+              if ((i.type === 'header' || i.type === 'project') && i.id && (i.label || i.name)) {
+                const label = normalizeText(i.label || i.name);
+                map[i.id] = label;
+                map[i.id.replace(/^header-/, '')] = label;
+              }
+            });
             break;
           }
           fiber = fiber.return;
         }
+      }
+    }
+    return map;
+  }
 
-        if (items && Array.isArray(items)) {
-          const projectMap = {};
-          items.forEach((i) => {
-            if ((i.type === 'header' || i.type === 'project') && i.id && (i.label || i.name)) {
-              const label = normalizeText(i.label || i.name);
-              projectMap[i.id] = label;
-              projectMap[i.id.replace(/^header-/, '')] = label;
-            }
-          });
+  function resolveProjectName() {
+    const projectMap = getProjectMap();
 
-          const urlParams = new URLSearchParams(location.search);
-          const sectionId = urlParams.get('section');
-          if (sectionId && projectMap[sectionId]) {
-            try { sessionStorage.setItem('antigravity_plus_last_project', projectMap[sectionId]); } catch (e) {}
-            return projectMap[sectionId];
-          }
+    // 1. URL section param
+    const urlParams = new URLSearchParams(location.search);
+    const sectionId = urlParams.get('section');
+    if (sectionId) {
+      const cleanId = sectionId.replace(/^header-/, '');
+      if (projectMap[sectionId]) return projectMap[sectionId];
+      if (projectMap[cleanId]) return projectMap[cleanId];
+    }
 
-          const threadMatch = location.pathname.match(/\/c\/([a-zA-Z0-9_-]+)/);
-          const currentThreadId = threadMatch ? threadMatch[1] : null;
-          if (currentThreadId) {
-            const currentItem = items.find((i) => i.cascadeId === currentThreadId);
-            if (currentItem) {
-              const projId = currentItem.groupId || currentItem.summary?.trajectoryMetadata?.projectId;
-              if (projId && projectMap[projId]) {
-                try { sessionStorage.setItem('antigravity_plus_last_project', projectMap[projId]); } catch (e) {}
-                return projectMap[projId];
+    // 2. Active thread
+    const threadMatch = location.pathname.match(/\/c\/([a-zA-Z0-9_-]+)/);
+    const currentThreadId = threadMatch ? threadMatch[1] : null;
+    if (currentThreadId) {
+      const sidebar = document.querySelector('[data-testid="conversation-list-sidebar"]');
+      if (sidebar) {
+        const fiberKey = Object.keys(sidebar).find((k) => k.startsWith('__reactFiber$'));
+        if (fiberKey) {
+          let fiber = sidebar[fiberKey];
+          while (fiber) {
+            if (fiber.memoizedProps && fiber.memoizedProps.items && Array.isArray(fiber.memoizedProps.items)) {
+              const currentItem = fiber.memoizedProps.items.find((i) => i.cascadeId === currentThreadId);
+              if (currentItem) {
+                const projId = currentItem.groupId || currentItem.summary?.trajectoryMetadata?.projectId;
+                if (projId) {
+                  const cleanProjId = String(projId).replace(/^header-/, '');
+                  if (projectMap[projId]) return projectMap[projId];
+                  if (projectMap[cleanProjId]) return projectMap[cleanProjId];
+                }
               }
+              break;
             }
+            fiber = fiber.return;
           }
         }
       }
+
+      try {
+        const catalog = JSON.parse(localStorage.getItem('antigravity_plus_thread_catalog') || '[]');
+        const catItem = catalog.find((c) => c.cascadeId === currentThreadId);
+        if (catItem && catItem.projectName && !/^[0-9a-f-]{36}$/i.test(catItem.projectName)) {
+          return catItem.projectName;
+        }
+      } catch (e) {}
     }
 
-    try {
-      const cachedMap = JSON.parse(localStorage.getItem('antigravity_plus_project_names') || '{}');
-      const threadMatch = location.pathname.match(/\/c\/([a-zA-Z0-9_-]+)/);
-      if (threadMatch && cachedMap[threadMatch[1]]) {
-        return cachedMap[threadMatch[1]];
+    // 3. Live native trigger (in empty state when inside project)
+    const nativeTrigger = document.querySelector('[data-testid="project-selector-trigger"], button[aria-label*="Select project" i]');
+    if (nativeTrigger) {
+      const span = nativeTrigger.querySelector('span');
+      const val = normalizeText(span ? span.textContent : nativeTrigger.textContent);
+      if (val && !isGenericTaskOrChat(val)) {
+        return val;
       }
-    } catch (e) {}
+    }
 
-    try {
-      const sessionProj = sessionStorage.getItem('antigravity_plus_last_project');
-      if (sessionProj) return sessionProj;
-    } catch (e) {}
+    // 4. Breadcrumbs: ONLY if 2 or more segments (Segment 0 is Project, Segment 1 is Task)
+    const breadcrumbs = Array.from(document.querySelectorAll('[data-testid="breadcrumb-segment"]')).map((b) => normalizeText(b.textContent));
+    if (breadcrumbs.length >= 2) {
+      const candidate = breadcrumbs[0];
+      if (candidate && !isGenericTaskOrChat(candidate)) {
+        const lower = candidate.toLowerCase();
+        const isKnown = Object.values(projectMap).some((v) => v.toLowerCase() === lower);
+        if (isKnown) return candidate;
+      }
+    }
 
-    return localStorage.getItem('antigravity_plus_last_project') || 'Workspace';
+    return null;
+  }
+
+  function currentProjectName() {
+    const proj = resolveProjectName();
+    if (proj) {
+      try { sessionStorage.setItem('antigravity_plus_last_project', proj); } catch (e) {}
+      return proj;
+    }
+    return 'Task';
   }
 
   function isNewChat() {
@@ -509,7 +543,8 @@ function Get-AntigravityComposerTopBarPayload {
     const chevron = bar.querySelector('[' + CHEVRON_ATTR + ']');
     if (!project || !projectText) return;
 
-    projectText.textContent = currentProjectName();
+    const label = currentProjectName();
+    projectText.textContent = label;
 
     const canSelect = isNewChat();
     if (chevron) {
@@ -519,15 +554,15 @@ function Get-AntigravityComposerTopBarPayload {
     if (canSelect) {
       project.style.cursor = 'pointer';
       project.style.pointerEvents = 'auto';
-      project.title = 'Switch workspace / project';
-      project.setAttribute('aria-label', 'Select project');
+      project.title = label === 'Task' ? 'Task' : 'Workspace: ' + label;
+      project.setAttribute('aria-label', label === 'Task' ? 'Task' : 'Select project');
       project.setAttribute('aria-disabled', 'false');
     } else {
       project.style.cursor = 'default';
       project.style.pointerEvents = 'none';
       project.style.background = 'transparent';
-      project.title = 'Workspace: ' + projectText.textContent;
-      project.setAttribute('aria-label', 'Project workspace');
+      project.title = label === 'Task' ? 'Task' : 'Workspace: ' + label;
+      project.setAttribute('aria-label', label === 'Task' ? 'Task' : 'Project workspace');
       project.setAttribute('aria-disabled', 'true');
     }
   }
@@ -710,18 +745,19 @@ function Get-AntigravityComposerTopBarPayload {
     const pillStyle = 'display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:6px;background:transparent;color:inherit;font-size:13px;';
     const btnStyle = pillStyle + 'border:1px solid transparent;cursor:pointer;outline:none;transition:background 0.15s ease;';
 
-    // 1. Project Selector Button (acts like the live one and includes select indicator)
+    // 1. Project / Task Button (displays project name if in project, otherwise Task)
     const project = document.createElement('button');
     project.type = 'button';
     project.setAttribute(PROJECT_BTN_ATTR, 'true');
     project.setAttribute('style', btnStyle);
-    project.setAttribute('aria-label', 'Select project');
-    project.title = 'Switch workspace / project';
+    const initialLabel = currentProjectName();
+    project.setAttribute('aria-label', initialLabel === 'Task' ? 'Task' : 'Select project');
+    project.title = initialLabel === 'Task' ? 'Task' : 'Workspace: ' + initialLabel;
     project.appendChild(createProjectFolderIcon());
     const projectText = document.createElement('span');
     projectText.setAttribute(PROJECT_VAL_ATTR, 'true');
     projectText.style.fontWeight = '600';
-    projectText.textContent = currentProjectName();
+    projectText.textContent = initialLabel;
     project.appendChild(projectText);
     const chevron = createChevronDownIcon();
     chevron.setAttribute(CHEVRON_ATTR, 'true');
