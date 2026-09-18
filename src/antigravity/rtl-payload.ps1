@@ -9,32 +9,64 @@ function Get-AntigravityRtlPayload {
   window.__ANTIGRAVITY_PLUS_RTL_INSTALLED = true;
 
   const RTL_SHARED = window.__AGY_RTL_SHARED || (function () {
-    const RTL_RE = /[\u0590-\u05FF\uFB1D-\uFB4F\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
-    const LTR_RE = /[A-Za-z\u00C0-\u024F]/;
+    const RTL_RE = /[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/g;
+    const LTR_RE = /[A-Za-z\u00C0-\u024F]/g;
+    const RTL_CODE_POINT_RANGES = [
+      [0x0590, 0x05ff], [0x0600, 0x06ff], [0x0700, 0x074f], [0x0750, 0x077f],
+      [0x0780, 0x07bf], [0x07c0, 0x07ff], [0x0800, 0x083f], [0x0840, 0x085f],
+      [0x0860, 0x086f], [0x0870, 0x089f], [0x08a0, 0x08ff], [0xfb1d, 0xfb4f],
+      [0xfb50, 0xfdff], [0xfe70, 0xfeff], [0x10800, 0x1083f], [0x10840, 0x1085f],
+      [0x10a00, 0x10a5f], [0x10e60, 0x10e7f], [0x1e800, 0x1e8df], [0x1e900, 0x1e95f],
+      [0x1ee00, 0x1eeff]
+    ];
+    function isRtlCodePoint(cp) {
+      for (const [start, end] of RTL_CODE_POINT_RANGES) {
+        if (cp >= start && cp <= end) return true;
+      }
+      return false;
+    }
+    function hasRtlCodePoint(text) {
+      const value = String(text || '');
+      for (let i = 0; i < value.length;) {
+        const cp = value.codePointAt(i);
+        if (isRtlCodePoint(cp)) return true;
+        i += cp > 0xffff ? 2 : 1;
+      }
+      return false;
+    }
     function classifyDirection(text) {
       if (!text) return null;
-      const clean = text.replace(/https?:\/\/[^\s]+/g, '').replace(/`[^`]+`/g, '').replace(/```[\s\S]*?```/g, '').trim();
-      for (let i = 0; i < clean.length; i++) {
-        if (RTL_RE.test(clean[i])) return 'rtl';
-        if (LTR_RE.test(clean[i])) return 'ltr';
-      }
+      const clean = String(text).replace(/https?:\/\/[^\s]+/g, '').replace(/`[^`]+`/g, '').replace(/```[\s\S]*?```/g, '').trim();
+      if (!clean) return null;
+      if (hasRtlCodePoint(clean)) return 'rtl';
+      return 'ltr';
+    }
+    function cellDirection(text) {
+      if (hasRtlCodePoint(text)) return 'rtl';
       return null;
     }
-    return { RTL_RE, LTR_RE, classifyDirection };
+    function tableDirectionFromCells(headerDirs, firstColDirs) {
+      if (headerDirs?.[0] === 'rtl' || firstColDirs?.[0] === 'rtl') return 'rtl';
+      return null;
+    }
+    return { RTL_RE, LTR_RE, hasRtlCodePoint, classifyDirection, cellDirection, tableDirectionFromCells };
   })();
 
   const STYLE_ID = 'antigravity-plus-rtl-style';
 
   function injectStyles() {
-    if (document.getElementById(STYLE_ID)) return;
-    const style = document.createElement('style');
-    style.id = STYLE_ID;
+    let style = document.getElementById(STYLE_ID);
+    if (!style) {
+      style = document.createElement('style');
+      style.id = STYLE_ID;
+      (document.head || document.documentElement).appendChild(style);
+    }
     style.textContent = `
       /* Antigravity Plus RTL Styles */
       [data-agy-rtl="rtl"] {
         direction: rtl !important;
         text-align: right !important;
-        unicode-bidi: plaintext !important;
+        unicode-bidi: isolate !important;
       }
 
       [data-agy-rtl="ltr"] {
@@ -92,6 +124,11 @@ function Get-AntigravityRtlPayload {
       }
 
       /* Tables */
+      table[data-agy-rtl="rtl"] {
+        direction: rtl !important;
+        text-align: right !important;
+      }
+
       th[data-agy-rtl="rtl"],
       td[data-agy-rtl="rtl"] {
         direction: rtl !important;
@@ -103,16 +140,13 @@ function Get-AntigravityRtlPayload {
       textarea[data-agy-composer-rtl="rtl"] {
         direction: rtl !important;
         text-align: right !important;
-        unicode-bidi: plaintext !important;
+        unicode-bidi: isolate !important;
       }
     `;
-    (document.head || document.documentElement).appendChild(style);
 
     const oldIndicator = document.getElementById('antigravity-plus-indicator');
     if (oldIndicator) oldIndicator.remove();
   }
-
-  // Toast removed
 
   const TEXT_TAGS = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE', 'TH', 'TD'];
   const EXCLUDE_TAGS = ['PRE', 'CODE', 'KBD', 'SAMP', 'SCRIPT', 'STYLE', 'SVG', 'INPUT', 'BUTTON'];
@@ -123,7 +157,7 @@ function Get-AntigravityRtlPayload {
     if (element.closest('pre, code, .cm-editor, .monaco-editor, [data-antigravity-plus-context-badge], [data-gemini-plus-top-badge], [data-codex-plus-context-badge]')) return;
 
     if (TEXT_TAGS.includes(element.tagName)) {
-      const text = element.innerText;
+      const text = element.innerText || element.textContent || '';
       if (!text || text.length < 2) return;
 
       const dir = RTL_SHARED.classifyDirection(text);
@@ -141,11 +175,33 @@ function Get-AntigravityRtlPayload {
 
     // Sidebar titles and labels
     if (element.tagName === 'A' || element.getAttribute('role') === 'button') {
-      const ariaLabel = element.getAttribute('aria-label') || element.innerText;
+      const ariaLabel = element.getAttribute('aria-label') || element.innerText || '';
       if (ariaLabel && RTL_SHARED.classifyDirection(ariaLabel) === 'rtl') {
         if (element.getAttribute('data-agy-rtl') !== 'rtl') {
           element.setAttribute('data-agy-rtl', 'rtl');
         }
+      }
+    }
+  }
+
+  function processTable(table) {
+    if (!table || table.nodeType !== Node.ELEMENT_NODE) return;
+    if (!RTL_SHARED.tableDirectionFromCells) return;
+
+    const headerCells = Array.from(table.querySelectorAll('thead th, thead td, tr:first-child th'));
+    const firstColCells = Array.from(table.querySelectorAll('tbody tr td:first-child, tr td:first-child'));
+
+    const headerDirs = headerCells.map(c => RTL_SHARED.cellDirection ? RTL_SHARED.cellDirection(c.innerText || c.textContent) : RTL_SHARED.classifyDirection(c.innerText || c.textContent));
+    const colDirs = firstColCells.map(c => RTL_SHARED.cellDirection ? RTL_SHARED.cellDirection(c.innerText || c.textContent) : RTL_SHARED.classifyDirection(c.innerText || c.textContent));
+
+    const tableDir = RTL_SHARED.tableDirectionFromCells(headerDirs, colDirs);
+    if (tableDir === 'rtl') {
+      if (table.getAttribute('data-agy-rtl') !== 'rtl') {
+        table.setAttribute('data-agy-rtl', 'rtl');
+      }
+    } else if (tableDir === 'ltr') {
+      if (table.getAttribute('data-agy-rtl') === 'rtl') {
+        table.removeAttribute('data-agy-rtl');
       }
     }
   }
@@ -179,6 +235,10 @@ function Get-AntigravityRtlPayload {
 
   function processTree(root) {
     if (!root) return;
+    const tables = root.querySelectorAll('table');
+    for (let i = 0; i < tables.length; i++) {
+      processTable(tables[i]);
+    }
     const candidates = root.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote, th, td, nav a, aside a, [role="navigation"] a');
     for (let i = 0; i < candidates.length; i++) {
       processElement(candidates[i]);

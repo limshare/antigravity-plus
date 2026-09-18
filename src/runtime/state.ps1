@@ -51,12 +51,12 @@ function New-AntigravityPlusState {
 function Get-AntigravityPlusUserDataDirectory {
     param([AllowEmptyString()][string]$LauncherKey)
 
+    # All windows share a single profile directory (mirrors codex-plus 'profile/shared').
+    # In Antigravity, every BrowserWindow opened via createWindow() runs in the same
+    # Electron process and shares the same language server, auth session, and nativeStorage —
+    # so per-key profile isolation is unnecessary and was causing separate-process spawning.
     $profileRoot = Join-Path $env:LOCALAPPDATA 'AntigravityPlus\profile'
-    $profilePath = if ([string]::IsNullOrWhiteSpace($LauncherKey)) {
-        $profileRoot
-    } else {
-        Join-Path $profileRoot $LauncherKey
-    }
+    $profilePath = Join-Path $profileRoot 'shared'
     if (-not (Test-Path -LiteralPath $profilePath)) {
         New-Item -ItemType Directory -Force -Path $profilePath | Out-Null
     }

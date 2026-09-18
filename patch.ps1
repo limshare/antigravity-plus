@@ -13,7 +13,8 @@ param(
     [switch]$SkipMain,
     [ValidateSet('Hebrew', 'Off')]
     [string]$ReplyLanguage = 'Hebrew',
-    [switch]$NoUpdate
+    [switch]$NoUpdate,
+    [switch]$NoMonitor
 )
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -31,6 +32,7 @@ $modules = @(
     'src\antigravity\context-badge.ps1',
     'src\antigravity\sidebar-enhancements.ps1',
     'src\antigravity\composer-top-bar.ps1',
+    'src\antigravity\new-window-button.ps1',
     'src\antigravity\payload-bundle.ps1',
     'src\runtime\files.ps1',
     'src\runtime\state.ps1',
@@ -77,7 +79,7 @@ if ($Restore) {
 
 if ($Launch) {
     if ($PSBoundParameters.ContainsKey('ReplyLanguage')) { Set-AntigravityPlusReplyLanguage -ReplyLanguage $ReplyLanguage }
-    Launch-AntigravityPlus -PreferredPort $Port -LauncherKey $LauncherKey -NoUpdate:$NoUpdate
+    Launch-AntigravityPlus -PreferredPort $Port -LauncherKey $LauncherKey -NoUpdate:$NoUpdate -NoMonitor:$NoMonitor
     exit 0
 }
 

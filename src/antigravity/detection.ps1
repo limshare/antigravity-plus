@@ -61,6 +61,17 @@ function Get-AntigravityInstallInfo {
         } catch {}
     }
 
+    if ($version -eq 'Unknown' -and (Test-Path -LiteralPath $exePath)) {
+        try {
+            $verInfo = (Get-Item -LiteralPath $exePath).VersionInfo
+            if ($verInfo -and $verInfo.FileVersion) {
+                $version = [string]$verInfo.FileVersion
+            } elseif ($verInfo -and $verInfo.ProductVersion) {
+                $version = [string]$verInfo.ProductVersion
+            }
+        } catch {}
+    }
+
     return [pscustomobject]@{
         Installed = $true
         ExePath = $exePath

@@ -68,9 +68,10 @@ function Invoke-CdpWebSocket {
 
     $cleanWsUrl = if ($WebSocketDebuggerUrl -is [array]) { [string]$WebSocketDebuggerUrl[0] } else { [string]$WebSocketDebuggerUrl }
     $client = [System.Net.WebSockets.ClientWebSocket]::new()
+    $cts = [System.Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds($TimeoutSeconds))
 
     try {
-        $client.ConnectAsync([Uri]$cleanWsUrl, [System.Threading.CancellationToken]::None).GetAwaiter().GetResult() | Out-Null
+        $client.ConnectAsync([Uri]$cleanWsUrl, $cts.Token).GetAwaiter().GetResult() | Out-Null
 
         $json = if ($Command -is [string]) { $Command } else { $Command | ConvertTo-Json -Depth 20 -Compress }
         $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
@@ -78,18 +79,17 @@ function Invoke-CdpWebSocket {
             [ArraySegment[byte]]::new($bytes),
             [System.Net.WebSockets.WebSocketMessageType]::Text,
             $true,
-            [System.Threading.CancellationToken]::None
+            $cts.Token
         ).GetAwaiter().GetResult() | Out-Null
 
         $buffer = New-Object byte[] 65536
         $segment = [ArraySegment[byte]]::new($buffer)
         $expectedId = if ($Command -is [hashtable] -and $Command.ContainsKey('id')) { $Command['id'] } elseif ($Command.id) { $Command.id } else { $null }
 
-        $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
-        while ($client.State -eq [System.Net.WebSockets.WebSocketState]::Open -and [DateTime]::UtcNow -lt $deadline) {
+        while ($client.State -eq [System.Net.WebSockets.WebSocketState]::Open -and -not $cts.IsCancellationRequested) {
             $ms = [System.IO.MemoryStream]::new()
             do {
-                $result = $client.ReceiveAsync($segment, [System.Threading.CancellationToken]::None).GetAwaiter().GetResult()
+                $result = $client.ReceiveAsync($segment, $cts.Token).GetAwaiter().GetResult()
                 if ($result.Count -gt 0) {
                     $ms.Write($buffer, 0, $result.Count)
                 }
@@ -116,6 +116,8 @@ function Invoke-CdpWebSocket {
             }
         }
         return $null
+    } catch {
+        return $null
     } finally {
         if ($client.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
             try {
@@ -127,6 +129,7 @@ function Invoke-CdpWebSocket {
             } catch {}
         }
         $client.Dispose()
+        $cts.Dispose()
     }
 }
 
@@ -134,13 +137,15 @@ function Invoke-CdpEvaluate {
     param(
         [Parameter(Mandatory)][string]$WebSocketDebuggerUrl,
         [Parameter(Mandatory)][string]$Expression,
-        [int]$CommandId = 1,
-        [int]$TimeoutSeconds = 15
+        [int]$CommandId = 0,
+        [int]$TimeoutSeconds = 5
     )
 
-    $cmd = New-CdpCommand -Id $CommandId -Method 'Runtime.evaluate' -Params @{
+    $id = if ($CommandId -gt 0) { $CommandId } else { Get-Random -Minimum 1000 -Maximum 999999 }
+    $cmd = New-CdpCommand -Id $id -Method 'Runtime.evaluate' -Params @{
         expression = $Expression
         returnByValue = $true
+        awaitPromise = $true
     }
     return Invoke-CdpWebSocket -WebSocketDebuggerUrl $WebSocketDebuggerUrl -Command $cmd -TimeoutSeconds $TimeoutSeconds
 }

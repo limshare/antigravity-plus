@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 
 public static class AntigravityNativeWindows {
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
@@ -20,11 +21,96 @@ public static class AntigravityNativeWindows {
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+
+    // SendInput structures for synthesizing native keystrokes
+    [StructLayout(LayoutKind.Sequential)]
+    public struct KEYBDINPUT {
+        public ushort wVk;
+        public ushort wScan;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MOUSEINPUT {
+        public int dx, dy, mouseData;
+        public uint dwFlags, time;
+        public IntPtr dwExtraInfo;
+    }
+    [StructLayout(LayoutKind.Explicit)]
+    public struct INPUT_UNION {
+        [FieldOffset(0)] public KEYBDINPUT ki;
+        [FieldOffset(0)] public MOUSEINPUT mi;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct INPUT {
+        public uint type;   // 1 = keyboard
+        public INPUT_UNION u;
+    }
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
     public const int SW_HIDE = 0;
     public const int SW_SHOWNORMAL = 1;
     public const int SW_SHOW = 5;
     public const int SW_RESTORE = 9;
+    public const uint INPUT_KEYBOARD = 1;
+    public const uint KEYEVENTF_KEYUP = 0x0002;
+    public const ushort VK_CONTROL = 0x11;
+    public const ushort VK_SHIFT   = 0x10;
+    public const ushort VK_N       = 0x4E;
+
+    [DllImport("user32.dll")]
+    public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+    // Send native Ctrl+Shift+N keystrokes into the OS input queue.
+    // When the user clicks the "New window" button in Antigravity, Antigravity
+    // is the active foreground window and receives these keystrokes immediately.
+    public static void SendNativeCtrlShiftN() {
+        keybd_event((byte)VK_CONTROL, 0, 0, UIntPtr.Zero);
+        keybd_event((byte)VK_SHIFT, 0, 0, UIntPtr.Zero);
+        keybd_event((byte)VK_N, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(40);
+        keybd_event((byte)VK_N, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        keybd_event((byte)VK_SHIFT, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        keybd_event((byte)VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+    }
+
+    // Send Ctrl+Shift+N to a given window handle using native SendInput.
+    // The window is briefly brought to foreground so the OS routes the input to it.
+    public static bool SendCtrlShiftN(IntPtr hWnd) {
+        // Bring the target window to foreground
+        uint rootPid;
+        uint targetTid = GetWindowThreadProcessId(hWnd, out rootPid);
+        uint curTid = GetCurrentThreadId();
+        AttachThreadInput(curTid, targetTid, true);
+        ShowWindow(hWnd, SW_RESTORE);
+        BringWindowToTop(hWnd);
+        SetForegroundWindow(hWnd);
+        Thread.Sleep(80);
+        AttachThreadInput(curTid, targetTid, false);
+
+        // Build Ctrl+Shift+N keydown/keyup sequence
+        var inputs = new INPUT[6];
+        // Ctrl down
+        inputs[0].type = INPUT_KEYBOARD; inputs[0].u.ki.wVk = VK_CONTROL;
+        // Shift down
+        inputs[1].type = INPUT_KEYBOARD; inputs[1].u.ki.wVk = VK_SHIFT;
+        // N down
+        inputs[2].type = INPUT_KEYBOARD; inputs[2].u.ki.wVk = VK_N;
+        // N up
+        inputs[3].type = INPUT_KEYBOARD; inputs[3].u.ki.wVk = VK_N;   inputs[3].u.ki.dwFlags = KEYEVENTF_KEYUP;
+        // Shift up
+        inputs[4].type = INPUT_KEYBOARD; inputs[4].u.ki.wVk = VK_SHIFT; inputs[4].u.ki.dwFlags = KEYEVENTF_KEYUP;
+        // Ctrl up
+        inputs[5].type = INPUT_KEYBOARD; inputs[5].u.ki.wVk = VK_CONTROL; inputs[5].u.ki.dwFlags = KEYEVENTF_KEYUP;
+
+        uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
+        return sent == (uint)inputs.Length;
+    }
 
     public static List<IntPtr> GetProcessWindowHandles(int[] processIds) {
         var set = new HashSet<int>(processIds);
@@ -677,6 +763,25 @@ function Start-AntigravityPortMonitor {
         $KnownProcessIds = @(Get-AntigravityMatchingProcessIds -Port $Port -LauncherKey $LauncherKey)
     }
 
+    # Start loopback event-driven listener for UI requests (e.g. New Window)
+    $controlPort = $Port + 100
+    $listener = $null
+    for ($attempt = 0; $attempt -lt 10; $attempt++) {
+        try {
+            $candidate = [System.Net.HttpListener]::new()
+            $candidate.Prefixes.Add("http://127.0.0.1:$controlPort/new-window/")
+            $candidate.Start()
+            $listener = $candidate
+            break
+        } catch {
+            $controlPort++
+        }
+    }
+    $asyncContext = $null
+    if ($listener -and $listener.IsListening) {
+        $asyncContext = $listener.BeginGetContext($null, $null)
+    }
+
     while ($true) {
         # Keep known process IDs updated while the instance is running
         $currentIds = @(Get-AntigravityMatchingProcessIds -Port $Port -LauncherKey $LauncherKey)
@@ -769,9 +874,43 @@ function Start-AntigravityPortMonitor {
                     Invoke-AntigravityPlusTargetInjection -Target $target -Payload $payload | Out-Null
                 } catch {}
             }
+
+            # Inform renderer of the event-driven control port
+            if ($controlPort -gt 0) {
+                try {
+                    Invoke-CdpEvaluate -WebSocketDebuggerUrl $wsUrl -Expression "window.__ANTIGRAVITY_PLUS_CONTROL_PORT = $controlPort;" -TimeoutSeconds 1 | Out-Null
+                } catch {}
+            }
         }
 
-        Start-Sleep -Milliseconds 1000
+        # Handle incoming event-driven UI requests (e.g. New Window)
+        if ($asyncContext -and $asyncContext.IsCompleted) {
+            try {
+                $context = $listener.EndGetContext($asyncContext)
+                $context.Response.AddHeader("Access-Control-Allow-Origin", "*")
+                $context.Response.AddHeader("Access-Control-Allow-Methods", "POST, OPTIONS, GET")
+                $context.Response.StatusCode = 200
+                $context.Response.Close()
+
+                Write-Info "Event-driven New Window requested from UI - sending native Ctrl+Shift+N..."
+                [AntigravityNativeWindows]::SendNativeCtrlShiftN()
+            } catch {
+                Write-Warn "Error handling control listener request: $_"
+            }
+            if ($listener -and $listener.IsListening) {
+                $asyncContext = $listener.BeginGetContext($null, $null)
+            }
+        }
+
+        Start-Sleep -Milliseconds 500
+    }
+
+    # Clean up local event listener
+    if ($listener) {
+        try {
+            $listener.Stop()
+            $listener.Close()
+        } catch {}
     }
 
     # The window is gone or processes terminated. Clean up this exact instance.
@@ -848,7 +987,7 @@ function Launch-AntigravityPlus {
     $injected = Invoke-AntigravityPlusInjectionOnPort -Port $port -LauncherKey $LauncherKey -TimeoutSeconds 30
 
     if ($injected) {
-        Write-Success "Antigravity Plus launched with full RTL & enhancement layer active (Port $port)!"
+        Write-Success "Antigravity Plus launched with full RTL and enhancement layer active (Port $port)!"
     } else {
         Write-Warn "Antigravity window launched, but target injection timed out on port $port."
     }

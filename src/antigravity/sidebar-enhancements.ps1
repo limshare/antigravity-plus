@@ -94,6 +94,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
 
     const elementsWithAttributes = root.querySelectorAll ? root.querySelectorAll(selector) : [];
     elementsWithAttributes.forEach(el => {
+      if (el.closest('[' + SYNTHETIC_SECTION_ATTR + ']')) return;
       ['aria-label', 'title', 'data-title', 'placeholder', 'data-tooltip'].forEach(attr => {
         const val = el.getAttribute(attr);
         if (val) {
@@ -318,9 +319,8 @@ function Get-AntigravitySidebarEnhancementsPayload {
 
   function createThreadSpinnerGraphic() {
     return `
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="shrink-0" xmlns="http://www.w3.org/2000/svg">
-        <path opacity="0.3" d="M18 12C18 8.68629 15.3137 6 12 6C8.68629 6 6 8.68629 6 12C6 15.3137 8.68629 18 12 18C15.3137 18 18 18 18 12ZM20 12C20 16.4183 16.4183 20 12 20C7.58172 20 4 16.4183 4 12C4 7.58172 7.58172 4 12 4C16.4183 4 20 7.58172 20 12Z" fill="currentColor"></path>
-        <path d="M12 4C16.4183 4 20 7.58172 20 12C20 16.4183 16.4183 20 12 20C7.58172 20 4 16.4183 4 12H6C6 15.3137 8.68629 18 12 18C15.3137 18 18 15.3137 18 12C18 8.68629 15.3137 6 12 6V4Z" fill="currentColor"></path>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" class="shrink-0" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14 8a6 6 0 1 1-6-6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"></path>
       </svg>
     `;
   }
@@ -335,7 +335,10 @@ function Get-AntigravitySidebarEnhancementsPayload {
 
   function getUnreadDotHtml() {
     return `
-      <span data-gemini-plus-thread-unread="true" class="inline-block w-2 h-2 rounded-full shrink-0 ml-1" style="background-color: #3b82f6; box-shadow: 0 0 5px rgba(59, 130, 246, 0.7);" title="Unread response"></span>
+      <div data-testid="status-unread-dot" class="relative flex items-center justify-center shrink-0 ml-1" style="width: 16px; height: 16px;" title="Unread response">
+        <div class="absolute h-3.5 w-3.5 bg-primary rounded-full opacity-10"></div>
+        <div class="h-1.5 w-1.5 bg-primary rounded-full"></div>
+      </div>
     `;
   }
 
@@ -380,8 +383,18 @@ function Get-AntigravitySidebarEnhancementsPayload {
   function syncNativeRowIndicators() {
     const unreadSet = getUnreadThreads();
     const workingSet = getWorkingThreads();
+    let unreadChanged = false;
+    let workingChanged = false;
     const nativeRows = document.querySelectorAll('[data-testid="conversation-row-sidebar"]');
     nativeRows.forEach(row => {
+      // In native project rows, Antigravity natively renders its original Turing active circle.
+      // Clean up any synthetic spinner or legacy unread indicator so only original native indicator is displayed.
+      const spinner = row.querySelector('[data-gemini-plus-thread-spinner="true"]');
+      if (spinner) spinner.remove();
+
+      const legacyUnread = row.querySelector('[data-gemini-plus-thread-unread="true"]');
+      if (legacyUnread) legacyUnread.remove();
+
       let cascadeId = row.getAttribute('data-cascade-id');
       if (!cascadeId) {
         const parent = row.closest('[data-cascade-id]') || row.querySelector('[data-cascade-id]') || row.querySelector('a[href*="/c/"]');
@@ -405,34 +418,54 @@ function Get-AntigravitySidebarEnhancementsPayload {
       }
       if (!cascadeId) return;
 
-      const isWorking = workingSet.has(cascadeId);
-      const isUnread = !isWorking && unreadSet.has(cascadeId);
-
-      let spinner = row.querySelector('[data-gemini-plus-thread-spinner="true"]');
-      let unread = row.querySelector('[data-gemini-plus-thread-unread="true"]');
-
-      if (isWorking) {
-        if (unread) unread.remove();
-        if (!spinner) {
-          const spinEl = document.createElement('div');
-          spinEl.innerHTML = getSpinnerHtml();
-          const target = spinEl.firstElementChild;
-          row.appendChild(target);
+      // 1. Detect native loading spinner rendered by Antigravity
+      const hasNativeSpinner = Boolean(row.querySelector('[data-testid="status-loading-spinner"]'));
+      if (hasNativeSpinner) {
+        if (!workingSet.has(cascadeId)) {
+          workingSet.add(cascadeId);
+          workingChanged = true;
         }
       } else {
-        if (spinner) spinner.remove();
-        if (isUnread) {
-          if (!unread) {
-            const dotEl = document.createElement('div');
-            dotEl.innerHTML = getUnreadDotHtml();
-            const target = dotEl.firstElementChild;
-            row.appendChild(target);
-          }
-        } else {
-          if (unread) unread.remove();
+        if (workingSet.has(cascadeId)) {
+          workingSet.delete(cascadeId);
+          workingChanged = true;
+        }
+      }
+
+      // 2. Detect native unread dot rendered by Antigravity
+      const hasNativeUnread = Boolean(row.querySelector('[data-testid="status-unread-dot"]'));
+      if (hasNativeUnread) {
+        if (!unreadSet.has(cascadeId)) {
+          unreadSet.add(cascadeId);
+          unreadChanged = true;
+        }
+        // If a thread has an unread dot, it has finished and cannot be working
+        if (workingSet.has(cascadeId)) {
+          workingSet.delete(cascadeId);
+          workingChanged = true;
+        }
+      } else {
+        if (unreadSet.has(cascadeId)) {
+          unreadSet.delete(cascadeId);
+          unreadChanged = true;
         }
       }
     });
+
+    // Ensure any thread that has an unread dot is not considered working
+    workingSet.forEach(id => {
+      if (unreadSet.has(id)) {
+        workingSet.delete(id);
+        workingChanged = true;
+      }
+    });
+
+    if (unreadChanged) {
+      saveUnreadThreads(unreadSet);
+    }
+    if (workingChanged) {
+      saveWorkingThreads(workingSet);
+    }
   }
 
   // 4. Synthetic Recents Section (Persistent across open/closed project states)
@@ -553,7 +586,10 @@ function Get-AntigravitySidebarEnhancementsPayload {
     const isCollapsed = sessionStorage.getItem(RECENTS_KEY) === 'true';
     const list = section.querySelector('.gemini-plus-recents-list');
     if (list) {
-      list.style.display = isCollapsed ? 'none' : 'flex';
+      const nextDisplay = isCollapsed ? 'none' : 'flex';
+      if (list.style.display !== nextDisplay) {
+        list.style.display = nextDisplay;
+      }
     }
 
     const virtualItems = Array.from(inner.querySelectorAll(':scope > [data-index]'));
@@ -599,8 +635,12 @@ function Get-AntigravitySidebarEnhancementsPayload {
 
       const btn = el.querySelector('button');
       if (btn && /see\s*all|see\s*less|see\s*more|show\s*more|show\s*less|view\s*all|view\s*more/i.test(btn.innerText || '')) {
-        el.setAttribute('data-gemini-native-see-all', 'true');
-        el.style.display = 'none';
+        if (!el.hasAttribute('data-gemini-native-see-all')) {
+          el.setAttribute('data-gemini-native-see-all', 'true');
+        }
+        if (el.style.display !== 'none') {
+          el.style.display = 'none';
+        }
         if (activeProjName) {
           projectNativeSeeAll.set(activeProjName, btn);
         }
@@ -623,10 +663,9 @@ function Get-AntigravitySidebarEnhancementsPayload {
       const nativeSeeAll = projectNativeSeeAll.get(projName);
 
       tasks.forEach((taskEl, taskIdx) => {
-        if (taskIdx < maxVisible) {
-          taskEl.style.display = '';
-        } else {
-          taskEl.style.display = 'none';
+        const nextDisp = taskIdx < maxVisible ? '' : 'none';
+        if (taskEl.style.display !== nextDisp) {
+          taskEl.style.display = nextDisp;
         }
       });
 
@@ -641,16 +680,24 @@ function Get-AntigravitySidebarEnhancementsPayload {
           pager.setAttribute(SYNTHETIC_PROJ_PAGER_ATTR, projName);
           inner.appendChild(pager);
         }
-        pager.style.display = '';
-        pager.className = 'w-full flex flex-col gap-[1px] select-none';
+        if (pager.style.display !== '') pager.style.display = '';
+        if (pager.className !== 'w-full flex flex-col gap-[1px] select-none') {
+          pager.className = 'w-full flex flex-col gap-[1px] select-none';
+        }
 
-        const nextHtml = `
-          <button type="button" data-gemini-plus-proj-action="more" style="display: ${hasMore ? 'flex' : 'none'};" class="relative w-full select-none cursor-pointer rounded-lg flex flex-row group pl-[30px] pr-2 py-1.5 items-center transition-colors text-xs text-muted-foreground hover:bg-sidebar-muted hover:text-foreground border-none bg-transparent font-medium focus:outline-none text-left">Show more</button>
-          <button type="button" data-gemini-plus-proj-action="less" style="display: ${hasLess ? 'flex' : 'none'};" class="relative w-full select-none cursor-pointer rounded-lg flex flex-row group pl-[30px] pr-2 py-1.5 items-center transition-colors text-xs text-muted-foreground hover:bg-sidebar-muted hover:text-foreground border-none bg-transparent font-medium focus:outline-none text-left">Show less</button>
-        `;
+        const moreBtn = pager.querySelector('[data-gemini-plus-proj-action="more"]');
+        const lessBtn = pager.querySelector('[data-gemini-plus-proj-action="less"]');
 
-        if (pager.innerHTML !== nextHtml) {
-          pager.innerHTML = nextHtml;
+        if (moreBtn && lessBtn) {
+          const moreDisp = hasMore ? 'flex' : 'none';
+          const lessDisp = hasLess ? 'flex' : 'none';
+          if (moreBtn.style.display !== moreDisp) moreBtn.style.display = moreDisp;
+          if (lessBtn.style.display !== lessDisp) lessBtn.style.display = lessDisp;
+        } else {
+          pager.innerHTML = `
+            <button type="button" data-gemini-plus-proj-action="more" style="display: ${hasMore ? 'flex' : 'none'};" class="relative w-full select-none cursor-pointer rounded-lg flex flex-row group pl-[30px] pr-2 py-1.5 items-center transition-colors text-xs text-muted-foreground hover:bg-sidebar-muted hover:text-foreground border-none bg-transparent font-medium focus:outline-none text-left">Show more</button>
+            <button type="button" data-gemini-plus-proj-action="less" style="display: ${hasLess ? 'flex' : 'none'};" class="relative w-full select-none cursor-pointer rounded-lg flex flex-row group pl-[30px] pr-2 py-1.5 items-center transition-colors text-xs text-muted-foreground hover:bg-sidebar-muted hover:text-foreground border-none bg-transparent font-medium focus:outline-none text-left">Show less</button>
+          `;
         }
 
         if (!pager.__hasListener) {
@@ -792,13 +839,30 @@ function Get-AntigravitySidebarEnhancementsPayload {
         const btn = header.querySelector('button');
         const chevron = header.querySelector('.recents-chevron');
         if (btn) btn.setAttribute('aria-expanded', String(!nextCollapsed));
-        if (chevron) chevron.classList.toggle('rotate-90', !nextCollapsed);
+        if (chevron) {
+          if (nextCollapsed) chevron.classList.remove('rotate-90');
+          else chevron.classList.add('rotate-90');
+        }
         const list = section.querySelector('.gemini-plus-recents-list');
         if (list) list.style.display = nextCollapsed ? 'none' : 'flex';
         layoutSidebarVirtualizer(inner, section);
       });
 
       section.appendChild(header);
+    } else {
+      const btn = header.querySelector('button');
+      const chevron = header.querySelector('.recents-chevron');
+      const expectedExpanded = String(!isCollapsed);
+      if (btn && btn.getAttribute('aria-expanded') !== expectedExpanded) {
+        btn.setAttribute('aria-expanded', expectedExpanded);
+      }
+      if (chevron) {
+        if (isCollapsed && chevron.classList.contains('rotate-90')) {
+          chevron.classList.remove('rotate-90');
+        } else if (!isCollapsed && !chevron.classList.contains('rotate-90')) {
+          chevron.classList.add('rotate-90');
+        }
+      }
     }
 
     // List container
@@ -808,6 +872,11 @@ function Get-AntigravitySidebarEnhancementsPayload {
       list.className = 'gemini-plus-recents-list flex flex-col gap-[1px] w-full';
       list.style.display = isCollapsed ? 'none' : 'flex';
       section.appendChild(list);
+    } else {
+      const nextDisplay = isCollapsed ? 'none' : 'flex';
+      if (list.style.display !== nextDisplay) {
+        list.style.display = nextDisplay;
+      }
     }
 
     // Paging calculation
@@ -820,52 +889,66 @@ function Get-AntigravitySidebarEnhancementsPayload {
     const workingSet = getWorkingThreads();
     const unreadSet = getUnreadThreads();
 
-    // Rows: single line with title (project) on left and timestamp / status on right (matching real thread styling)
-    const rowsHtml = visibleRecents.map(t => {
-      const isActive = currentPath.includes(t.cascadeId);
-      const activeClasses = isActive ? 'bg-sidebar-secondary text-foreground' : 'text-secondary-foreground hover:bg-sidebar-muted hover:text-foreground';
-      const displayTitle = t.projectName ? `${t.title} (${t.projectName})` : t.title;
+    // Compute signature to check if recents list content or active state actually changed
+    const renderSignature = [
+      isCollapsed,
+      loaded,
+      currentPath,
+      visibleRecents.map(t => `${t.cascadeId}:${t.title}:${t.projectName}:${t.relativeTime}:${workingSet.has(t.cascadeId)}:${unreadSet.has(t.cascadeId)}`).join('|')
+    ].join(';;');
 
-      const isWorking = workingSet.has(t.cascadeId);
-      const isUnread = !isWorking && unreadSet.has(t.cascadeId);
-      const indicatorHtml = isWorking ? getSpinnerHtml() : (isUnread ? getUnreadDotHtml() : '');
+    if (list.__renderSignature !== renderSignature) {
+      list.__renderSignature = renderSignature;
 
-      return `
-        <div ${SYNTHETIC_ROW_ATTR}="true" data-cascade-id="${t.cascadeId}" role="button" tabindex="0" class="relative w-full select-none cursor-pointer rounded-lg flex flex-row justify-between group pl-[30px] pr-2 py-1.5 items-center transition-colors ${activeClasses}">
-          <div class="relative flex gap-2 grow min-w-0 items-center pointer-events-none">
-            <div class="flex flex-col items-start min-w-0 transition-opacity w-full">
-              <span class="truncate inline-block truncate text-left w-full text-sm" title="${displayTitle.replace(/"/g, '&quot;')}">${displayTitle}</span>
+      // Rows: single line with title (project) on left and timestamp / status on right (matching real thread styling)
+      const rowsHtml = visibleRecents.map(t => {
+        const isActive = currentPath.includes(t.cascadeId);
+        const activeClasses = isActive ? 'bg-sidebar-secondary text-foreground' : 'text-secondary-foreground hover:bg-sidebar-muted hover:text-foreground';
+        const displayTitle = t.projectName ? `${t.title} (${t.projectName})` : t.title;
+
+        const isWorking = workingSet.has(t.cascadeId);
+        const isUnread = !isWorking && unreadSet.has(t.cascadeId);
+        const indicatorHtml = isWorking ? getSpinnerHtml() : (isUnread ? getUnreadDotHtml() : '');
+
+        return `
+          <div ${SYNTHETIC_ROW_ATTR}="true" data-cascade-id="${t.cascadeId}" role="button" tabindex="0" class="relative w-full select-none cursor-pointer rounded-lg flex flex-row justify-between group pl-[30px] pr-2 py-1.5 items-center transition-colors ${activeClasses}">
+            <div class="relative flex gap-2 grow min-w-0 items-center pointer-events-none">
+              <div class="flex flex-col items-start min-w-0 transition-opacity w-full">
+                <span class="truncate inline-block truncate text-left w-full text-sm" title="${displayTitle.replace(/"/g, '&quot;')}">${displayTitle}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-1 shrink-0 select-none pointer-events-none">
+              <span class="text-xs text-muted-foreground opacity-60">${t.relativeTime}</span>
+              ${indicatorHtml}
             </div>
           </div>
-          <div class="flex items-center gap-1 shrink-0 select-none pointer-events-none">
-            <span class="text-xs text-muted-foreground opacity-60">${t.relativeTime}</span>
-            ${indicatorHtml}
-          </div>
+        `;
+      }).join('');
+
+      // Pager HTML (Show more / Show less)
+      const hasMore = visibleCount < totalCount;
+      const hasLess = loaded > 0;
+      const showPager = totalCount > RECENTS_MIN_VISIBLE;
+
+      const pagerHtml = showPager ? `
+        <div data-gemini-plus-sidebar-pager="recents" class="w-full flex flex-col gap-[1px] select-none">
+          <button type="button" data-gemini-plus-action="more" style="display: ${hasMore ? 'flex' : 'none'};" class="relative w-full select-none cursor-pointer rounded-lg flex flex-row group pl-[30px] pr-2 py-1.5 items-center transition-colors text-xs text-muted-foreground hover:bg-sidebar-muted hover:text-foreground border-none bg-transparent font-medium focus:outline-none text-left">Show more</button>
+          <button type="button" data-gemini-plus-action="less" style="display: ${hasLess ? 'flex' : 'none'};" class="relative w-full select-none cursor-pointer rounded-lg flex flex-row group pl-[30px] pr-2 py-1.5 items-center transition-colors text-xs text-muted-foreground hover:bg-sidebar-muted hover:text-foreground border-none bg-transparent font-medium focus:outline-none text-left">Show less</button>
         </div>
-      `;
-    }).join('');
+      ` : '';
 
-    // Pager HTML (Show more / Show less)
-    const hasMore = visibleCount < totalCount;
-    const hasLess = loaded > 0;
-    const showPager = totalCount > RECENTS_MIN_VISIBLE;
-
-    const pagerHtml = showPager ? `
-      <div data-gemini-plus-sidebar-pager="recents" class="w-full flex flex-col gap-[1px] select-none">
-        <button type="button" data-gemini-plus-action="more" style="display: ${hasMore ? 'flex' : 'none'};" class="relative w-full select-none cursor-pointer rounded-lg flex flex-row group pl-[30px] pr-2 py-1.5 items-center transition-colors text-xs text-muted-foreground hover:bg-sidebar-muted hover:text-foreground border-none bg-transparent font-medium focus:outline-none text-left">Show more</button>
-        <button type="button" data-gemini-plus-action="less" style="display: ${hasLess ? 'flex' : 'none'};" class="relative w-full select-none cursor-pointer rounded-lg flex flex-row group pl-[30px] pr-2 py-1.5 items-center transition-colors text-xs text-muted-foreground hover:bg-sidebar-muted hover:text-foreground border-none bg-transparent font-medium focus:outline-none text-left">Show less</button>
-      </div>
-    ` : '';
-
-    const nextFullHtml = rowsHtml + pagerHtml;
-    if (list.innerHTML !== nextFullHtml) {
-      list.innerHTML = nextFullHtml;
+      list.innerHTML = rowsHtml + pagerHtml;
 
       // Attach row navigation listeners
       list.querySelectorAll('[' + SYNTHETIC_ROW_ATTR + ']').forEach(row => {
         const navigate = () => {
           const cascadeId = row.getAttribute('data-cascade-id');
           if (cascadeId) {
+            const unreadSet = getUnreadThreads();
+            if (unreadSet.has(cascadeId)) {
+              unreadSet.delete(cascadeId);
+              saveUnreadThreads(unreadSet);
+            }
             if (window.__TSR_ROUTER__ && window.__TSR_ROUTER__.history) {
               window.__TSR_ROUTER__.history.push('/c/' + cascadeId);
             } else {
@@ -932,14 +1015,17 @@ function Get-AntigravitySidebarEnhancementsPayload {
     applying = true;
     try {
       syncActiveTaskStatus();
+      syncNativeRowIndicators();
       applyTerminology(document.body);
       const sidebarEl = document.querySelector('[data-testid="conversation-list-sidebar"]');
       if (sidebarEl) {
         renderRecentsSection(sidebarEl);
-        syncNativeRowIndicators();
       }
       restoreOpenStates();
     } finally {
+      if (observer) {
+        observer.takeRecords();
+      }
       applying = false;
     }
   }
@@ -964,7 +1050,8 @@ function Get-AntigravitySidebarEnhancementsPayload {
         m.target.closest('[' + SYNTHETIC_SECTION_ATTR + ']') ||
         m.target.closest('[' + SYNTHETIC_PROJ_PAGER_ATTR + ']') ||
         m.target.closest('[data-gemini-plus-thread-spinner]') ||
-        m.target.closest('[data-gemini-plus-thread-unread]')
+        m.target.closest('[data-gemini-plus-thread-unread]') ||
+        m.target.closest('[data-gemini-native-see-all]')
       )) return false;
       return true;
     });
@@ -975,7 +1062,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['aria-expanded', 'aria-label', 'title', 'data-title', 'data-testid', 'style']
+    attributeFilter: ['aria-expanded', 'aria-label', 'title', 'data-title', 'data-testid']
   });
 
   window.__GEMINI_PLUS_SIDEBAR_ENHANCEMENTS = {

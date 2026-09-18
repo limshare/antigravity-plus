@@ -52,6 +52,7 @@ Assert-Check "PowerShell Syntax Validation" {
 . (Join-Path $rootDir 'src\antigravity\context-badge.ps1')
 . (Join-Path $rootDir 'src\antigravity\sidebar-enhancements.ps1')
 . (Join-Path $rootDir 'src\antigravity\composer-top-bar.ps1')
+. (Join-Path $rootDir 'src\antigravity\new-window-button.ps1')
 . (Join-Path $rootDir 'src\antigravity\payload-bundle.ps1')
 . (Join-Path $rootDir 'src\runtime\files.ps1')
 . (Join-Path $rootDir 'src\runtime\state.ps1')

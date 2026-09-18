@@ -5,6 +5,7 @@ function Get-AntigravityPayloadBundle {
     $badge = Get-AntigravityContextBadgePayload
     $sidebar = Get-AntigravitySidebarEnhancementsPayload
     $composerTopBar = Get-AntigravityComposerTopBarPayload
+    $newWindow = Get-AntigravityNewWindowButtonPayload
 
     return @"
 // Antigravity Plus Runtime Bundle
@@ -38,6 +39,11 @@ function Get-AntigravityPayloadBundle {
         $composerTopBar
     } catch(e) {
         console.error('[Antigravity Plus] Composer top bar payload error:', e);
+    }
+    try {
+        $newWindow
+    } catch(e) {
+        console.error('[Antigravity Plus] New window button payload error:', e);
     }
     try {
         window.__GEMINI_PLUS_INJECTION_READY = true;
