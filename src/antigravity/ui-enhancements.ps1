@@ -7,6 +7,22 @@ function Get-AntigravityUiEnhancementsPayload {
   if (window.__ANTIGRAVITY_PLUS_HEADER_INTERVAL) {
     try { clearInterval(window.__ANTIGRAVITY_PLUS_HEADER_INTERVAL); } catch (e) {}
   }
+  if (window.__ANTIGRAVITY_PLUS_SCROLL_INTERVAL) {
+    try { clearInterval(window.__ANTIGRAVITY_PLUS_SCROLL_INTERVAL); } catch (e) {}
+  }
+
+  // Intercept autoscroll scrollTo and prevent auto-scrolling down
+  if (!window.__ANTIGRAVITY_PLUS_SCROLL_OVERRIDE_INSTALLED) {
+    window.__ANTIGRAVITY_PLUS_SCROLL_OVERRIDE_INSTALLED = true;
+    const origScrollTo = Element.prototype.scrollTo;
+    Element.prototype.scrollTo = function (...args) {
+      if (this.getAttribute && this.getAttribute('data-testid') === 'autoscroll-viewport') {
+        // Block automated scrolls triggered by message streaming / rendering
+        return;
+      }
+      return origScrollTo.apply(this, args);
+    };
+  }
 
   // Keyboard shortcut listener: Ctrl+Shift+R to force toggle RTL on composer/view
   if (!window.__ANTIGRAVITY_PLUS_KEYBINDING_INSTALLED) {
@@ -289,12 +305,41 @@ function Get-AntigravityUiEnhancementsPayload {
     }
   }
 
+  function disableAutoScrollInViewports(root = document) {
+    const viewports = root.querySelectorAll ? root.querySelectorAll('[data-testid="autoscroll-viewport"]') : [];
+    viewports.forEach(vp => {
+      const fiberKey = Object.keys(vp).find(k => k.startsWith('__reactFiber$'));
+      let fiber = fiberKey ? vp[fiberKey] : null;
+      while (fiber) {
+        if (fiber.memoizedProps && fiber.memoizedProps.showScrollToBottomButton !== undefined) break;
+        fiber = fiber.return;
+      }
+      if (!fiber) return;
+      let s = fiber.memoizedState;
+      let idx = 0;
+      while (s) {
+        // hook idx 2 in WL is shouldAutoScroll ref
+        if (idx === 2 && s.memoizedState && typeof s.memoizedState === 'object' && 'current' in s.memoizedState) {
+          if (s.memoizedState.current !== false) {
+            s.memoizedState.current = false;
+          }
+          break;
+        }
+        idx++;
+        s = s.next;
+      }
+    });
+  }
+
   function checkAndCollapse(root = document) {
     // 1. Format all worked-for headers
     const allWorkedFor = root.querySelectorAll('[data-testid="worked-for-collapsible"]');
     allWorkedFor.forEach(formatCollapsibleHeader);
 
-    // 2. Check aria-expanded collapsibles (worked-for accordion, tool groups, thinking)
+    // 2. Prevent auto-scrolling down in conversation viewports
+    disableAutoScrollInViewports(root);
+
+    // 3. Check aria-expanded collapsibles (worked-for accordion, tool groups, thinking)
     const collapsibles = root.querySelectorAll(
       '[data-testid="worked-for-collapsible"][aria-expanded="true"], [data-testid="tool-group-collapsible"][aria-expanded="true"], [data-testid="thinking-collapsible-trigger"][aria-expanded="true"]'
     );
@@ -304,7 +349,7 @@ function Get-AntigravityUiEnhancementsPayload {
       }
     });
 
-    // 3. Check command / step elements with expanded output (exclude user-input-step)
+    // 4. Check command / step elements with expanded output (exclude user-input-step)
     const stepElements = root.querySelectorAll(
       '[data-testid="run-command-step"], [data-testid="terminal-run-step"]'
     );
@@ -386,11 +431,12 @@ function Get-AntigravityUiEnhancementsPayload {
     attributeFilter: ['aria-expanded', 'data-testid', 'class']
   });
 
-  // Background ticker to keep headers fresh and formatted during long-running tasks
+  // Background ticker to keep headers fresh and auto-scrolling suppressed
   window.__ANTIGRAVITY_PLUS_HEADER_INTERVAL = setInterval(() => {
     const btns = document.querySelectorAll('[data-testid="worked-for-collapsible"]');
     btns.forEach(formatCollapsibleHeader);
-  }, 400);
+    disableAutoScrollInViewports(document);
+  }, 300);
 
   window.__ANTIGRAVITY_PLUS_UI_OBSERVER = observer;
   window.__ANTIGRAVITY_PLUS_UI_INSTALLED = true;
@@ -398,7 +444,7 @@ function Get-AntigravityUiEnhancementsPayload {
   // Initial pass to collapse any currently open running tool groups and command outputs
   checkAndCollapse(document);
 
-  console.log('[Antigravity Plus] UI Enhancements installed (Auto-collapse agent messages & commands, hidden Working message, hidden notification toast).');
+  console.log('[Antigravity Plus] UI Enhancements installed (Auto-collapse agent messages & commands, auto-scroll prevention, hidden Working message, hidden notification toast).');
 })();
 '@
 }
