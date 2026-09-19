@@ -819,6 +819,9 @@ function Get-AntigravityComposerTopBarPayload {
   }
 
   let userWantsPanelOpen = false;
+  let taskStartedTimestamp = 0;
+  let processBadgeTimer = null;
+  const PROCESS_DURATION_THRESHOLD_MS = 10000;
 
   function toggleRunningItemsPanel() {
     userWantsPanelOpen = !userWantsPanelOpen;
@@ -1060,9 +1063,39 @@ function Get-AntigravityComposerTopBarPayload {
     if (!badge || !countEl) return;
 
     const count = getRunningProcessCount();
-    countEl.textContent = String(count);
-    badge.title = count + ' background process' + (count === 1 ? '' : 'es') + ' running in this session';
-    badge.style.display = count > 0 ? 'inline-flex' : 'none';
+    const now = Date.now();
+
+    if (count > 0) {
+      if (taskStartedTimestamp === 0) {
+        taskStartedTimestamp = now;
+      }
+      const elapsed = now - taskStartedTimestamp;
+      if (elapsed >= PROCESS_DURATION_THRESHOLD_MS) {
+        if (processBadgeTimer) {
+          clearTimeout(processBadgeTimer);
+          processBadgeTimer = null;
+        }
+        countEl.textContent = String(count);
+        badge.title = count + ' background process' + (count === 1 ? '' : 'es') + ' running in this session (click to toggle details)';
+        badge.style.display = 'inline-flex';
+      } else {
+        badge.style.display = 'none';
+        if (!processBadgeTimer) {
+          const remaining = PROCESS_DURATION_THRESHOLD_MS - elapsed;
+          processBadgeTimer = setTimeout(() => {
+            processBadgeTimer = null;
+            syncProcessBadge(bar);
+          }, Math.max(50, remaining));
+        }
+      }
+    } else {
+      taskStartedTimestamp = 0;
+      if (processBadgeTimer) {
+        clearTimeout(processBadgeTimer);
+        processBadgeTimer = null;
+      }
+      badge.style.display = 'none';
+    }
 
     // Hide bulky process cards in the above-composer container if present
     const aboveComposer = bar.previousElementSibling;
