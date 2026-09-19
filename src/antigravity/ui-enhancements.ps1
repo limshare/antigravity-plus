@@ -11,13 +11,21 @@ function Get-AntigravityUiEnhancementsPayload {
     try { clearInterval(window.__ANTIGRAVITY_PLUS_SCROLL_INTERVAL); } catch (e) {}
   }
 
-  // Intercept autoscroll scrollTo and prevent auto-scrolling down
+  // Allow temporary programmatically allowed scrolls (e.g. initial submit, scroll-to-bottom button)
+  window.__ANTIGRAVITY_PLUS_ALLOW_SCROLL_UNTIL = window.__ANTIGRAVITY_PLUS_ALLOW_SCROLL_UNTIL || 0;
+
+  // Intercept autoscroll scrollTo and prevent continuous auto-scrolling during response generation
   if (!window.__ANTIGRAVITY_PLUS_SCROLL_OVERRIDE_INSTALLED) {
     window.__ANTIGRAVITY_PLUS_SCROLL_OVERRIDE_INSTALLED = true;
     const origScrollTo = Element.prototype.scrollTo;
     Element.prototype.scrollTo = function (...args) {
       if (this.getAttribute && this.getAttribute('data-testid') === 'autoscroll-viewport') {
-        // Block automated scrolls triggered by message streaming / rendering
+        const now = Date.now();
+        // If explicitly permitted by user action or initial prompt submit, allow it
+        if (now < (window.__ANTIGRAVITY_PLUS_ALLOW_SCROLL_UNTIL || 0)) {
+          return origScrollTo.apply(this, args);
+        }
+        // Block automated continuous streaming scrolls
         return;
       }
       return origScrollTo.apply(this, args);
@@ -25,6 +33,7 @@ function Get-AntigravityUiEnhancementsPayload {
   }
 
   // Keyboard shortcut listener: Ctrl+Shift+R to force toggle RTL on composer/view
+  // Also detect Enter key on prompt submission to allow initial scroll down to user prompt
   if (!window.__ANTIGRAVITY_PLUS_KEYBINDING_INSTALLED) {
     window.__ANTIGRAVITY_PLUS_KEYBINDING_INSTALLED = true;
     window.addEventListener('keydown', (e) => {
@@ -37,6 +46,21 @@ function Get-AntigravityUiEnhancementsPayload {
         } else {
           document.body.setAttribute('data-agy-force-rtl', 'true');
           console.log('[Antigravity Plus] Forced RTL enabled.');
+        }
+        return;
+      }
+
+      // When user presses Enter (without Shift) in composer input, allow Antigravity
+      // to perform its initial scroll to position the user prompt naturally
+      if (e.key === 'Enter' && !e.shiftKey) {
+        const composer = e.target && e.target.closest && (
+          e.target.closest('.monaco-editor') ||
+          e.target.closest('[data-testid="composer-input"]') ||
+          e.target.closest('textarea')
+        );
+        if (composer) {
+          // Allow initial submit scroll for 1.2 seconds
+          window.__ANTIGRAVITY_PLUS_ALLOW_SCROLL_UNTIL = Date.now() + 1200;
         }
       }
     }, true);
@@ -96,11 +120,46 @@ function Get-AntigravityUiEnhancementsPayload {
     }
   `;
 
-  // Track manual user clicks so user-expanded sections stay expanded
+  // Track manual user clicks so user-expanded sections stay expanded,
+  // and handle send button / scroll-to-bottom button clicks
   if (!window.__ANTIGRAVITY_PLUS_USER_TOGGLE_LISTENER) {
     window.__ANTIGRAVITY_PLUS_USER_TOGGLE_LISTENER = true;
     document.addEventListener('click', (e) => {
-      const trigger = e.target.closest && e.target.closest(
+      const target = e.target;
+      if (!target || !target.closest) return;
+
+      // 1. Detect scroll to bottom button click (native system arrow)
+      const scrollBottomBtn = target.closest(
+        'button[aria-label*="bottom" i], button[title*="bottom" i], [data-testid*="scroll-to-bottom"], [data-testid*="scroll-bottom"]'
+      ) || (target.closest('button') && target.closest('button').querySelector('svg path[d*="M8 12"], svg path[d*="m8 12"], svg path[d*="M7 10"], svg path[d*="13 7"]'));
+
+      if (scrollBottomBtn) {
+        // Explicitly allow scrollTo and force scroll to bottom
+        window.__ANTIGRAVITY_PLUS_ALLOW_SCROLL_UNTIL = Date.now() + 1500;
+        const vp = document.querySelector('[data-testid="autoscroll-viewport"]');
+        if (vp) {
+          setTimeout(() => {
+            try { vp.scrollTop = vp.scrollHeight; } catch (err) {}
+          }, 0);
+          setTimeout(() => {
+            try { vp.scrollTop = vp.scrollHeight; } catch (err) {}
+          }, 50);
+        }
+        return;
+      }
+
+      // 2. Detect Send / Submit prompt button click
+      const sendBtn = target.closest(
+        'button[aria-label*="Send" i], button[title*="Send" i], [data-testid="send-button"], [data-testid*="submit"]'
+      );
+      if (sendBtn) {
+        // Allow initial submit scroll for 1.2 seconds
+        window.__ANTIGRAVITY_PLUS_ALLOW_SCROLL_UNTIL = Date.now() + 1200;
+        return;
+      }
+
+      // 3. User toggle handling
+      const trigger = target.closest(
         '[data-testid="tool-group-collapsible"], [data-testid="worked-for-collapsible"], [data-testid="thinking-collapsible-trigger"], [data-testid="run-command-step"], [data-testid="terminal-run-step"], [data-testid*="terminal"], [data-testid*="command"]'
       );
       if (trigger) {
@@ -305,7 +364,20 @@ function Get-AntigravityUiEnhancementsPayload {
     }
   }
 
+  function isResponseGenerating() {
+    return Boolean(
+      document.querySelector('button[aria-label*="Stop" i]') ||
+      document.querySelector('button[aria-label*="Cancel" i]') ||
+      document.querySelector('[data-testid="stop-button"]') ||
+      document.querySelector('button[aria-label="Stop generating"]')
+    );
+  }
+
   function disableAutoScrollInViewports(root = document) {
+    // Only suppress auto-scrolling when the assistant is actively generating a response
+    if (!isResponseGenerating()) {
+      return;
+    }
     const viewports = root.querySelectorAll ? root.querySelectorAll('[data-testid="autoscroll-viewport"]') : [];
     viewports.forEach(vp => {
       const fiberKey = Object.keys(vp).find(k => k.startsWith('__reactFiber$'));

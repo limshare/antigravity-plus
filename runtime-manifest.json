@@ -53,8 +53,8 @@
                   {
                       "path":  "src/antigravity/ui-enhancements.ps1",
                       "target":  "src/antigravity/ui-enhancements.ps1",
-                      "size":  18562,
-                      "sha256":  "9e8adadd4cb8992c08a295ea0489aa7916bbed1f77ddb071329f53a204f6807e"
+                      "size":  21780,
+                      "sha256":  "6edaaf9fbcd45329d893f43e77430a04c04c3294da25a6321a44290ac3417b86"
                   },
                   {
                       "path":  "src/antigravity/context-badge.ps1",
