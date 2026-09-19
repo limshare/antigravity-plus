@@ -97,8 +97,25 @@ function Get-AntigravityUiEnhancementsPayload {
     }, true);
   }
 
+  function isGeminiModelActive() {
+    // Check model selector text or aria-label in composer
+    const modelBtn = document.querySelector('[data-testid="model-selector-trigger"]') ||
+                     document.querySelector('button[aria-haspopup="menu"]:has(svg)');
+    const text = (modelBtn ? (modelBtn.innerText || modelBtn.getAttribute('aria-label') || '') : '').toLowerCase();
+    if (text) {
+      return text.includes('gemini');
+    }
+    // If no model button detected yet, default to false (do not collapse non-Gemini)
+    return false;
+  }
+
   function collapseTrigger(el) {
     if (!el || el.getAttribute('data-agy-user-toggled') === 'true') {
+      return;
+    }
+
+    // Only collapse if the current active agent model is Gemini
+    if (!isGeminiModelActive()) {
       return;
     }
 
@@ -210,9 +227,8 @@ function Get-AntigravityUiEnhancementsPayload {
       }
     } catch (e) {}
 
-    if (!isRunning) {
-      isRunning = btn.classList.contains('hidden') || !!document.querySelector('[data-testid="stop-button"], button[aria-label*="Stop"]');
-    }
+    // Only rely on React Fiber's native isRunning status
+    // (no DOM heuristic fallbacks which cause false positives when sessions stop)
 
     const current = span.textContent || '';
     let elapsedSec = 0;
