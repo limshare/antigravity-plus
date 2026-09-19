@@ -91,7 +91,7 @@ function Get-AntigravityComposerTopBarPayload {
         animation: gemini-plus-spin 3s linear infinite;
       }
 
-      /* Hide bulky background process widget above composer when composer top bar is active */
+      /* Hide bulky background process widget and running-items-panel by default unless user toggles open */
       [data-gemini-plus-hide-bulky-process="true"] {
         display: none !important;
       }
@@ -818,6 +818,39 @@ function Get-AntigravityComposerTopBarPayload {
     window.dispatchEvent(new CustomEvent('antigravity-plus-push'));
   }
 
+  let userWantsPanelOpen = false;
+
+  function toggleRunningItemsPanel() {
+    userWantsPanelOpen = !userWantsPanelOpen;
+    const runningPanel = document.querySelector('[data-testid="running-items-panel"]');
+    if (runningPanel) {
+      if (userWantsPanelOpen) {
+        runningPanel.removeAttribute('data-gemini-plus-hide-bulky-process');
+        const btn = runningPanel.querySelector('button');
+        if (btn && btn.getAttribute('aria-expanded') === 'false') {
+          try { btn.click(); } catch (e) {}
+        }
+      } else {
+        runningPanel.setAttribute('data-gemini-plus-hide-bulky-process', 'true');
+      }
+    }
+  }
+
+  function syncRunningItemsPanelDisplay() {
+    const runningPanel = document.querySelector('[data-testid="running-items-panel"]');
+    if (!runningPanel) return;
+
+    if (!userWantsPanelOpen) {
+      if (!runningPanel.hasAttribute('data-gemini-plus-hide-bulky-process')) {
+        runningPanel.setAttribute('data-gemini-plus-hide-bulky-process', 'true');
+      }
+    } else {
+      if (runningPanel.hasAttribute('data-gemini-plus-hide-bulky-process')) {
+        runningPanel.removeAttribute('data-gemini-plus-hide-bulky-process');
+      }
+    }
+  }
+
   function createComposerTopBar() {
     const bar = document.createElement('div');
     bar.setAttribute(TOP_BAR_ATTR, 'true');
@@ -879,18 +912,33 @@ function Get-AntigravityComposerTopBarPayload {
     branch.appendChild(branchText);
 
     // 4. Background Process Pill (Icon + Number)
-    const processBadge = document.createElement('span');
+    const processBadge = document.createElement('button');
+    processBadge.type = 'button';
     processBadge.setAttribute(PROCESS_BADGE_ATTR, 'true');
+    processBadge.setAttribute('style', btnStyle);
+    processBadge.setAttribute('aria-label', 'Background processes');
     processBadge.appendChild(createProcessIcon());
     const processCountText = document.createElement('span');
     processCountText.setAttribute(PROCESS_COUNT_ATTR, 'true');
     const runningCount = getRunningProcessCount();
     processCountText.textContent = String(runningCount);
     processBadge.appendChild(processCountText);
-    processBadge.title = runningCount + ' background process' + (runningCount === 1 ? '' : 'es') + ' running in this session';
+    processBadge.title = runningCount + ' background process' + (runningCount === 1 ? '' : 'es') + ' running (click to toggle details)';
     if (runningCount === 0) {
       processBadge.style.display = 'none';
     }
+
+    processBadge.addEventListener('mouseenter', () => {
+      processBadge.style.background = 'rgba(128, 128, 128, 0.18)';
+    });
+    processBadge.addEventListener('mouseleave', () => {
+      processBadge.style.background = 'transparent';
+    });
+    processBadge.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleRunningItemsPanel();
+    });
 
     // 5. New Chat Button
     const newChat = document.createElement('button');
@@ -1040,6 +1088,9 @@ function Get-AntigravityComposerTopBarPayload {
         }
       });
     }
+
+    // Hide or show native running-items-panel inside input box based on user toggle
+    syncRunningItemsPanelDisplay();
   }
 
   function syncGitActionButtons(bar) {
