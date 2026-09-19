@@ -23,6 +23,8 @@ Assert-True ($rtlPayload.Contains('processArtifactCards')) 'RTL payload should i
 Assert-True ($rtlPayload.Contains('.artifact-card[data-agy-rtl="rtl"]')) 'RTL payload should include artifact card style selector.'
 Assert-True ($rtlPayload.Contains('ensureMixedLtrTail')) 'RTL payload should include mixed LTR tail isolation.'
 Assert-True ($rtlPayload.Contains('data-agy-rtl-ltr-tail')) 'RTL payload should include LTR tail selector.'
+Assert-True ($rtlPayload.Contains('[contenteditable]')) 'RTL payload should exclude contenteditable elements from processElement and processLists.'
+
 
 $nodeCommand = Get-Command -Name node -ErrorAction SilentlyContinue
 if ($nodeCommand) {

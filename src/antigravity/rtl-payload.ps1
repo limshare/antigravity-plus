@@ -2,9 +2,12 @@ function Get-AntigravityRtlPayload {
     @'
 (function () {
   if (window.__ANTIGRAVITY_PLUS_RTL_INSTALLED) {
-    // Already running - refresh styles
+    // Already running - refresh styles & disconnect previous observer
     const oldStyle = document.getElementById('antigravity-plus-rtl-style');
     if (oldStyle) oldStyle.remove();
+    if (window.__ANTIGRAVITY_PLUS_OBSERVER) {
+      try { window.__ANTIGRAVITY_PLUS_OBSERVER.disconnect(); } catch (e) {}
+    }
   }
   window.__ANTIGRAVITY_PLUS_RTL_INSTALLED = true;
 
@@ -363,7 +366,7 @@ function Get-AntigravityRtlPayload {
 
   function processLists(root) {
     for (const list of root.querySelectorAll(LIST_CONTAINER_SELECTOR)) {
-      if (list.closest('pre, code, kbd, samp, .cm-editor, .monaco-editor, [contenteditable="false"]')) continue;
+      if (list.closest('pre, code, kbd, samp, .cm-editor, .monaco-editor, [contenteditable], [contenteditable="false"]')) continue;
       const listText = Array.from(list.querySelectorAll(':scope > ' + LIST_ITEM_SELECTOR))
         .map((item) => getListItemOwnText(item))
         .join(' ');
@@ -445,7 +448,7 @@ function Get-AntigravityRtlPayload {
   function processElement(element) {
     if (!element || element.nodeType !== Node.ELEMENT_NODE) return;
     if (EXCLUDE_TAGS.includes(element.tagName)) return;
-    if (element.closest('pre, code, .cm-editor, .monaco-editor, [data-antigravity-plus-context-badge], [data-gemini-plus-top-badge], [data-codex-plus-context-badge]')) return;
+    if (element.closest('pre, code, .cm-editor, .monaco-editor, [contenteditable], [data-antigravity-plus-context-badge], [data-gemini-plus-top-badge], [data-codex-plus-context-badge]')) return;
     // worked-for-collapsible is managed exclusively by ui-enhancements (always LTR)
     if (element.closest('[data-testid="worked-for-collapsible"]')) return;
     if (element.tagName === 'LI' || element.tagName === 'OL' || element.tagName === 'UL') return;
