@@ -56,3 +56,23 @@ To avoid this error across all agents:
 
 3. **Orphan Pruning**:
    - Use `Clear-AntigravityOrphanedProcesses` during installation, restoration, and launch workflows to ensure no zombie processes linger on the system.
+
+---
+
+## 4. Live Injection of Changes (Mandatory)
+
+Whenever modifying frontend/UI/payload scripts (such as `src/antigravity/*.ps1`):
+1. Update `runtime-manifest.json` via:
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\update-runtime-manifest.ps1
+   ```
+2. Run relevant tests:
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-enhancements.tests.ps1
+   ```
+3. **Always inject changes into the running Antigravity instance**:
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\patch.ps1 -LiveInject
+   ```
+   This ensures updates take effect immediately in the active window without requiring an app restart.
+
