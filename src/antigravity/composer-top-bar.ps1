@@ -271,10 +271,39 @@ function Get-AntigravityComposerTopBarPayload {
       return Math.max(0, window.__ANTIGRAVITY_PLUS_RUNNING_PROCESSES_COUNT);
     }
 
+    // 1. Check native running-items-panel (used by Antigravity for background tasks & subagents)
+    const runningPanel = document.querySelector('[data-testid="running-items-panel"]');
+    if (runningPanel) {
+      let fiberKey = Object.keys(runningPanel).find((k) => k.startsWith('__reactFiber$'));
+      let fiber = fiberKey ? runningPanel[fiberKey] : null;
+      while (fiber) {
+        if (fiber.memoizedProps && (fiber.memoizedProps.tasks !== undefined || fiber.memoizedProps.subagents !== undefined)) {
+          const tasks = Array.isArray(fiber.memoizedProps.tasks) ? fiber.memoizedProps.tasks.length : 0;
+          const subagents = Array.isArray(fiber.memoizedProps.subagents) ? fiber.memoizedProps.subagents.length : 0;
+          return tasks + subagents;
+        }
+        fiber = fiber.return;
+      }
+
+      // Fallback if fiber inspection failed: check if panel is expanded and has tasks
+      const isCollapsed = runningPanel.classList.contains('grid-rows-[0fr]') ||
+                          runningPanel.style.gridTemplateRows === '0px' ||
+                          (runningPanel.getBoundingClientRect().height === 0 && !runningPanel.querySelector('.animate-spin'));
+      if (!isCollapsed) {
+        const text = (runningPanel.innerText || '').trim();
+        const m = text.match(/(\d+)\s*(?:task|process|background)/i);
+        if (m) return parseInt(m[1], 10);
+        if (text.length > 0 && runningPanel.querySelector('.animate-spin, button[aria-label*="Stop" i], button[aria-label*="Cancel" i]')) {
+          return 1;
+        }
+      }
+      return 0;
+    }
+
+    // 2. Fallback: check elements strictly above the composer
     const anchor = findComposerAnchor();
     if (!anchor || !anchor.container) return 0;
 
-    // Must be scoped strictly to the current session's composer area (directly above the composer)
     const topBar = anchor.container.querySelector('[' + TOP_BAR_ATTR + ']');
     const aboveComposer = topBar ? topBar.previousElementSibling : (anchor.insertBefore ? anchor.insertBefore.previousElementSibling : null);
 
