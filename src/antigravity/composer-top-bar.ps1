@@ -610,6 +610,29 @@ function Get-AntigravityComposerTopBarPayload {
           }
           f = f.return;
         }
+
+        let currFiber = sidebar[fiberKey];
+        while (currFiber) {
+          let s = currFiber.memoizedState;
+          while (s) {
+            if (Array.isArray(s.memoizedState) && s.memoizedState.length > 0) {
+              const first = s.memoizedState[0];
+              if (first && first.cascadeId && first.summary) {
+                const threadMatch = location.pathname.match(/\/c\/([a-zA-Z0-9_-]+)/);
+                const currentThreadId = threadMatch ? threadMatch[1] : null;
+                if (currentThreadId) {
+                  const matchItem = s.memoizedState.find(x => x.cascadeId === currentThreadId);
+                  if (matchItem) {
+                    return matchItem.summary?.trajectoryMetadata?.projectId || null;
+                  }
+                }
+                break;
+              }
+            }
+            s = s.next;
+          }
+          currFiber = currFiber.return;
+        }
       }
     }
     return null;
