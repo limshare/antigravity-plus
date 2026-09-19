@@ -47,14 +47,14 @@
                   {
                       "path":  "src/antigravity/rtl-payload.ps1",
                       "target":  "src/antigravity/rtl-payload.ps1",
-                      "size":  23408,
-                      "sha256":  "76a61c027f35889b50d9b4cb0a7b1ac109694c9b6b61a75773291c1e5ad3399d"
+                      "size":  23765,
+                      "sha256":  "1ecd4d021d9debb37296e1989f6a92b88d3d9c715e1ea7c39be0d468c061a63e"
                   },
                   {
                       "path":  "src/antigravity/ui-enhancements.ps1",
                       "target":  "src/antigravity/ui-enhancements.ps1",
-                      "size":  13753,
-                      "sha256":  "638b11fdfed33b9e6ea2c2475dc5cc5aa2e6aa76e46ba6456f18025b95202174"
+                      "size":  18562,
+                      "sha256":  "9e8adadd4cb8992c08a295ea0489aa7916bbed1f77ddb071329f53a204f6807e"
                   },
                   {
                       "path":  "src/antigravity/context-badge.ps1",
@@ -65,14 +65,14 @@
                   {
                       "path":  "src/antigravity/sidebar-enhancements.ps1",
                       "target":  "src/antigravity/sidebar-enhancements.ps1",
-                      "size":  43667,
-                      "sha256":  "8302f8d9c0e91f38ea05f500be7fbc061d8d5d1541f251df2c6e8ba32a5010cb"
+                      "size":  44756,
+                      "sha256":  "f181d796b44b88c9262cc49f43e90cfde40b817e7561f84bb062188cd209ad17"
                   },
                   {
                       "path":  "src/antigravity/composer-top-bar.ps1",
                       "target":  "src/antigravity/composer-top-bar.ps1",
-                      "size":  40023,
-                      "sha256":  "baf92e15de581d47528e2891cd26c27fcdf8eab60a9ce36a1ba1cca416f980da"
+                      "size":  48419,
+                      "sha256":  "1f2261515c4afc5b0792b6d55b0d82f449a11e3fe5f3b25f0d284c3a8a333ef6"
                   },
                   {
                       "path":  "src/antigravity/new-window-button.ps1",
