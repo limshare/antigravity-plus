@@ -12,7 +12,7 @@ function Get-AntigravityComposerTopBarPayload {
   const PROJECT_VAL_ATTR = 'data-gemini-plus-composer-project';
   const PROCESS_BADGE_ATTR = 'data-gemini-plus-composer-process';
   const PROCESS_COUNT_ATTR = 'data-gemini-plus-process-count';
-  const BUILD_VERSION = '2026.09.18.2';
+  const BUILD_VERSION = '2026.09.18.6';
   const STYLE_ID = 'gemini-plus-composer-top-bar-style';
 
   if (window.__GEMINI_PLUS_COMPOSER_TOP_BAR && window.__GEMINI_PLUS_COMPOSER_TOP_BAR.observer) {
@@ -75,16 +75,23 @@ function Get-AntigravityComposerTopBarPayload {
       [data-gemini-plus-composer-process] {
         display: inline-flex;
         align-items: center;
-        gap: 5px;
-        padding: 2px 7px;
-        border-radius: 12px;
-        background: rgba(59, 130, 246, 0.15);
+        gap: 6px;
+        padding: 3px 8px;
+        border-radius: 6px;
+        border: 1px solid transparent;
+        background: transparent;
         color: #3b82f6;
-        font-size: 12px;
-        font-weight: 600;
+        font-size: 13px;
+        font-weight: 500;
         line-height: 1;
-        cursor: default;
-        transition: all 0.2s ease;
+        cursor: pointer;
+        outline: none;
+        user-select: none;
+        transition: background 0.15s ease, color 0.15s ease;
+      }
+
+      [data-gemini-plus-composer-process]:hover {
+        background: rgba(128, 128, 128, 0.18) !important;
       }
 
       [data-gemini-plus-composer-process] svg {
@@ -224,7 +231,7 @@ function Get-AntigravityComposerTopBarPayload {
       }
     }
 
-      try {
+    try {
         const catalog = JSON.parse(localStorage.getItem('antigravity_plus_thread_catalog') || '[]');
         const catItem = catalog.find((c) => c.cascadeId === currentThreadId);
         if (catItem && catItem.projectName && !/^[0-9a-f-]{36}$/i.test(catItem.projectName)) {
@@ -333,7 +340,6 @@ function Get-AntigravityComposerTopBarPayload {
 
     if (!aboveComposer) return 0;
 
-    // Find any background process / task / running command items specifically inside the active session's above-composer container
     const processItems = Array.from(aboveComposer.children).filter((child) => {
       if (child.hasAttribute(TOP_BAR_ATTR)) return false;
       const text = (child.textContent || '').trim().toLowerCase();
@@ -918,7 +924,6 @@ function Get-AntigravityComposerTopBarPayload {
     const processBadge = document.createElement('button');
     processBadge.type = 'button';
     processBadge.setAttribute(PROCESS_BADGE_ATTR, 'true');
-    processBadge.setAttribute('style', btnStyle);
     processBadge.setAttribute('aria-label', 'Background processes');
     processBadge.appendChild(createProcessIcon());
     const processCountText = document.createElement('span');
@@ -927,9 +932,7 @@ function Get-AntigravityComposerTopBarPayload {
     processCountText.textContent = String(runningCount);
     processBadge.appendChild(processCountText);
     processBadge.title = runningCount + ' background process' + (runningCount === 1 ? '' : 'es') + ' running (click to toggle details)';
-    if (runningCount === 0) {
-      processBadge.style.display = 'none';
-    }
+    processBadge.style.display = 'none';
 
     processBadge.addEventListener('mouseenter', () => {
       processBadge.style.background = 'rgba(128, 128, 128, 0.18)';
@@ -1105,6 +1108,7 @@ function Get-AntigravityComposerTopBarPayload {
           const text = (child.textContent || '').toLowerCase();
           const testId = (child.getAttribute('data-testid') || '').toLowerCase();
           const cls = (child.className || '').toString().toLowerCase();
+
           // Never hide error alerts or troubleshooting notices
           if (testId.includes('error') || cls.includes('error') || child.getAttribute('role') === 'alert' ||
               text.includes('error') || text.includes('troubleshooting') || text.includes('retry')) {
