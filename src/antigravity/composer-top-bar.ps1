@@ -197,8 +197,32 @@ function Get-AntigravityComposerTopBarPayload {
             }
             fiber = fiber.return;
           }
+
+          let currFiber = sidebar[fiberKey];
+          while (currFiber) {
+            let s = currFiber.memoizedState;
+              while (s) {
+                if (Array.isArray(s.memoizedState) && s.memoizedState.length > 0) {
+                  const first = s.memoizedState[0];
+                  if (first && first.cascadeId && first.summary) {
+                    const matchItem = s.memoizedState.find(x => x.cascadeId === currentThreadId);
+                    if (matchItem) {
+                      const projId = matchItem.summary?.trajectoryMetadata?.projectId;
+                      if (projId) {
+                        const cleanProjId = String(projId).replace(/^header-/, '');
+                        if (projectMap[projId]) return projectMap[projId];
+                        if (projectMap[cleanProjId]) return projectMap[cleanProjId];
+                      }
+                    }
+                    break;
+                  }
+                }
+            s = s.next;
+          }
+          currFiber = currFiber.return;
         }
       }
+    }
 
       try {
         const catalog = JSON.parse(localStorage.getItem('antigravity_plus_thread_catalog') || '[]');
