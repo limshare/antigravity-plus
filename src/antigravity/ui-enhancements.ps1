@@ -11,29 +11,10 @@ function Get-AntigravityUiEnhancementsPayload {
     try { clearInterval(window.__ANTIGRAVITY_PLUS_SCROLL_INTERVAL); } catch (e) {}
   }
 
-  // Allow temporary programmatically allowed scrolls (e.g. initial submit, scroll-to-bottom button)
-  window.__ANTIGRAVITY_PLUS_ALLOW_SCROLL_UNTIL = window.__ANTIGRAVITY_PLUS_ALLOW_SCROLL_UNTIL || 0;
-
-  // Intercept autoscroll scrollTo and prevent continuous auto-scrolling during response generation
-  if (!window.__ANTIGRAVITY_PLUS_SCROLL_OVERRIDE_INSTALLED) {
-    window.__ANTIGRAVITY_PLUS_SCROLL_OVERRIDE_INSTALLED = true;
-    const origScrollTo = Element.prototype.scrollTo;
-    Element.prototype.scrollTo = function (...args) {
-      if (this.getAttribute && this.getAttribute('data-testid') === 'autoscroll-viewport') {
-        const now = Date.now();
-        // If explicitly permitted by user action or initial prompt submit, allow it
-        if (now < (window.__ANTIGRAVITY_PLUS_ALLOW_SCROLL_UNTIL || 0)) {
-          return origScrollTo.apply(this, args);
-        }
-        // Block automated continuous streaming scrolls
-        return;
-      }
-      return origScrollTo.apply(this, args);
-    };
-  }
+  // Track the last user prompt turn that has been aligned to the top
+  window.__ANTIGRAVITY_PLUS_LAST_ALIGNED_USER_STEP = window.__ANTIGRAVITY_PLUS_LAST_ALIGNED_USER_STEP || null;
 
   // Keyboard shortcut listener: Ctrl+Shift+R to force toggle RTL on composer/view
-  // Also detect Enter key on prompt submission to allow initial scroll down to user prompt
   if (!window.__ANTIGRAVITY_PLUS_KEYBINDING_INSTALLED) {
     window.__ANTIGRAVITY_PLUS_KEYBINDING_INSTALLED = true;
     window.addEventListener('keydown', (e) => {
@@ -48,20 +29,6 @@ function Get-AntigravityUiEnhancementsPayload {
           console.log('[Antigravity Plus] Forced RTL enabled.');
         }
         return;
-      }
-
-      // When user presses Enter (without Shift) in composer input, allow Antigravity
-      // to perform its initial scroll to position the user prompt naturally
-      if (e.key === 'Enter' && !e.shiftKey) {
-        const composer = e.target && e.target.closest && (
-          e.target.closest('.monaco-editor') ||
-          e.target.closest('[data-testid="composer-input"]') ||
-          e.target.closest('textarea')
-        );
-        if (composer) {
-          // Allow initial submit scroll for 1.2 seconds
-          window.__ANTIGRAVITY_PLUS_ALLOW_SCROLL_UNTIL = Date.now() + 1200;
-        }
       }
     }, true);
   }
@@ -134,8 +101,6 @@ function Get-AntigravityUiEnhancementsPayload {
       ) || (target.closest('button') && target.closest('button').querySelector('svg path[d*="M8 12"], svg path[d*="m8 12"], svg path[d*="M7 10"], svg path[d*="13 7"]'));
 
       if (scrollBottomBtn) {
-        // Explicitly allow scrollTo and force scroll to bottom
-        window.__ANTIGRAVITY_PLUS_ALLOW_SCROLL_UNTIL = Date.now() + 1500;
         const vp = document.querySelector('[data-testid="autoscroll-viewport"]');
         if (vp) {
           setTimeout(() => {
@@ -145,16 +110,6 @@ function Get-AntigravityUiEnhancementsPayload {
             try { vp.scrollTop = vp.scrollHeight; } catch (err) {}
           }, 50);
         }
-        return;
-      }
-
-      // 2. Detect Send / Submit prompt button click
-      const sendBtn = target.closest(
-        'button[aria-label*="Send" i], button[title*="Send" i], [data-testid="send-button"], [data-testid*="submit"]'
-      );
-      if (sendBtn) {
-        // Allow initial submit scroll for 1.2 seconds
-        window.__ANTIGRAVITY_PLUS_ALLOW_SCROLL_UNTIL = Date.now() + 1200;
         return;
       }
 
@@ -380,6 +335,27 @@ function Get-AntigravityUiEnhancementsPayload {
     }
     const viewports = root.querySelectorAll ? root.querySelectorAll('[data-testid="autoscroll-viewport"]') : [];
     viewports.forEach(vp => {
+      // Find the latest user input step in this viewport
+      const userSteps = vp.querySelectorAll('[data-testid="user-input-step"]');
+      const latestUserStep = userSteps.length > 0 ? userSteps[userSteps.length - 1] : null;
+
+      if (latestUserStep && window.__ANTIGRAVITY_PLUS_LAST_ALIGNED_USER_STEP !== latestUserStep) {
+        window.__ANTIGRAVITY_PLUS_LAST_ALIGNED_USER_STEP = latestUserStep;
+        // Find turn container or sticky header
+        const turnContainer = latestUserStep.closest('.scroll-mt-4') || latestUserStep;
+        let offset = 0;
+        let curr = turnContainer;
+        while (curr && curr !== vp) {
+          offset += curr.offsetTop;
+          curr = curr.offsetParent;
+        }
+        // Smoothly or immediately align the user prompt near the top of the viewport
+        try {
+          vp.scrollTop = Math.max(0, offset - 10);
+        } catch (e) {}
+      }
+
+      // Ensure shouldAutoScroll ref is set to false so subsequent streaming tokens don't drag the view down
       const fiberKey = Object.keys(vp).find(k => k.startsWith('__reactFiber$'));
       let fiber = fiberKey ? vp[fiberKey] : null;
       while (fiber) {

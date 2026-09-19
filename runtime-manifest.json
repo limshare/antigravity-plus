@@ -53,8 +53,8 @@
                   {
                       "path":  "src/antigravity/ui-enhancements.ps1",
                       "target":  "src/antigravity/ui-enhancements.ps1",
-                      "size":  21780,
-                      "sha256":  "6edaaf9fbcd45329d893f43e77430a04c04c3294da25a6321a44290ac3417b86"
+                      "size":  20706,
+                      "sha256":  "b06229d6cabb79c8bb364becf174bbebfabc32f8c3be51e073578a5d05c8743d"
                   },
                   {
                       "path":  "src/antigravity/context-badge.ps1",
@@ -65,8 +65,8 @@
                   {
                       "path":  "src/antigravity/sidebar-enhancements.ps1",
                       "target":  "src/antigravity/sidebar-enhancements.ps1",
-                      "size":  44756,
-                      "sha256":  "f181d796b44b88c9262cc49f43e90cfde40b817e7561f84bb062188cd209ad17"
+                      "size":  45114,
+                      "sha256":  "f8e0c6e308aac51a3afdfbf09b84599abc21e5706706d5246daa8e455e85f378"
                   },
                   {
                       "path":  "src/antigravity/composer-top-bar.ps1",

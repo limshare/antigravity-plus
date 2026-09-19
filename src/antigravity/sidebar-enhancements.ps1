@@ -105,10 +105,10 @@ function Get-AntigravitySidebarEnhancementsPayload {
     });
   }
 
-  // 2. Open States Tracking and Restoration (Projects and Sections per-window)
+  // 2. Open States Tracking and Restoration (Projects and Sections persistent across restarts)
   function getSavedProjectStates() {
     try {
-      return JSON.parse(sessionStorage.getItem(PROJECT_STATES_KEY) || '{}');
+      return JSON.parse(localStorage.getItem(PROJECT_STATES_KEY) || '{}');
     } catch (e) {
       return {};
     }
@@ -119,13 +119,13 @@ function Get-AntigravitySidebarEnhancementsPayload {
     try {
       const states = getSavedProjectStates();
       states[projectName] = Boolean(isExpanded);
-      sessionStorage.setItem(PROJECT_STATES_KEY, JSON.stringify(states));
+      localStorage.setItem(PROJECT_STATES_KEY, JSON.stringify(states));
     } catch (e) {}
   }
 
   function getSavedSectionStates() {
     try {
-      return JSON.parse(sessionStorage.getItem(SECTION_STATES_KEY) || '{}');
+      return JSON.parse(localStorage.getItem(SECTION_STATES_KEY) || '{}');
     } catch (e) {
       return {};
     }
@@ -136,7 +136,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
     try {
       const states = getSavedSectionStates();
       states[sectionTitle] = Boolean(isExpanded);
-      sessionStorage.setItem(SECTION_STATES_KEY, JSON.stringify(states));
+      localStorage.setItem(SECTION_STATES_KEY, JSON.stringify(states));
     } catch (e) {}
   }
 
@@ -180,13 +180,25 @@ function Get-AntigravitySidebarEnhancementsPayload {
   const restoredCards = new WeakSet();
   const restoredSections = new WeakSet();
 
+  function triggerElementToggle(el) {
+    if (!el) return;
+    const propsKey = Object.keys(el).find(k => k.startsWith('__reactProps$'));
+    if (propsKey && typeof el[propsKey]?.onClick === 'function') {
+      try {
+        el[propsKey].onClick({ preventDefault: () => {}, stopPropagation: () => {} });
+        return;
+      } catch (err) {}
+    }
+    try { el.click(); } catch (err) {}
+  }
+
   function restoreOpenStates() {
     if (isRestoringStates) return;
     isRestoringStates = true;
     try {
       const now = Date.now();
       const savedProjects = getSavedProjectStates();
-      const projectCards = document.querySelectorAll('button[data-project-card="true"]');
+      const projectCards = document.querySelectorAll('button[data-project-card]');
       projectCards.forEach(card => {
         const name = (card.innerText || '').trim();
         if (!name) return;
@@ -207,7 +219,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
         const isCurrentlyExpanded = card.getAttribute('aria-expanded') === 'true';
 
         if (shouldBeExpanded !== isCurrentlyExpanded) {
-          try { card.click(); } catch(e) {}
+          triggerElementToggle(card);
         }
       });
 
@@ -236,7 +248,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
         const isCurrentlyExpanded = btn.getAttribute('aria-expanded') === 'true';
 
         if (shouldBeExpanded !== isCurrentlyExpanded) {
-          try { btn.click(); } catch(e) {}
+          triggerElementToggle(btn);
         }
       });
     } finally {
@@ -251,7 +263,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
     const target = e.target;
     if (!target) return;
 
-    const projectCard = target.closest('button[data-project-card="true"]');
+    const projectCard = target.closest('button[data-project-card]');
     if (projectCard) {
       const name = (projectCard.innerText || '').trim();
       if (name) {
@@ -513,7 +525,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
             }
           });
 
-          document.querySelectorAll('button[data-project-card="true"]').forEach(btn => {
+          document.querySelectorAll('button[data-project-card]').forEach(btn => {
             const name = (btn.innerText || '').trim();
             const parent = btn.closest('[data-cascade-id]') || btn.closest('[data-project-id]');
             const id = parent?.getAttribute('data-project-id');
@@ -583,7 +595,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
   function layoutSidebarVirtualizer(inner, section) {
     if (!inner || !section) return;
 
-    const isCollapsed = sessionStorage.getItem(RECENTS_KEY) === 'true';
+    const isCollapsed = localStorage.getItem(RECENTS_KEY) === 'true';
     const list = section.querySelector('.gemini-plus-recents-list');
     if (list) {
       const nextDisplay = isCollapsed ? 'none' : 'flex';
@@ -612,7 +624,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
     let activeProjName = null;
 
     virtualItems.forEach(el => {
-      const projCard = el.querySelector('button[data-project-card="true"]');
+      const projCard = el.querySelector('button[data-project-card]');
       if (projCard) {
         activeProjName = (projCard.innerText || '').trim();
         if (!projectTasks.has(activeProjName)) {
@@ -746,7 +758,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
         layoutElements.push(el);
 
         // Check if this task is the last visible task of an active project
-        const isProjCard = !!el.querySelector('button[data-project-card="true"]');
+        const isProjCard = !!el.querySelector('button[data-project-card]');
         if (!isProjCard) {
           projectTasks.forEach((tasks, projName) => {
             const visibleTasks = tasks.filter(t => t.style.display !== 'none');
@@ -815,7 +827,7 @@ function Get-AntigravitySidebarEnhancementsPayload {
     if (allRecents.length === 0) return;
 
     const currentPath = window.location.pathname || '';
-    const isCollapsed = sessionStorage.getItem(RECENTS_KEY) === 'true';
+    const isCollapsed = localStorage.getItem(RECENTS_KEY) === 'true';
 
     // Header
     let header = section.querySelector('.gemini-plus-recents-header');
@@ -834,8 +846,8 @@ function Get-AntigravitySidebarEnhancementsPayload {
       `;
 
       header.addEventListener('click', () => {
-        const nextCollapsed = sessionStorage.getItem(RECENTS_KEY) !== 'true';
-        sessionStorage.setItem(RECENTS_KEY, String(nextCollapsed));
+        const nextCollapsed = localStorage.getItem(RECENTS_KEY) !== 'true';
+        localStorage.setItem(RECENTS_KEY, String(nextCollapsed));
         const btn = header.querySelector('button');
         const chevron = header.querySelector('.recents-chevron');
         if (btn) btn.setAttribute('aria-expanded', String(!nextCollapsed));
