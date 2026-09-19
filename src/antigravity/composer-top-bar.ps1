@@ -287,13 +287,19 @@ function Get-AntigravityComposerTopBarPayload {
       const testId = (child.getAttribute('data-testid') || '').toLowerCase();
       const cls = (child.className || '').toString().toLowerCase();
 
+      // Exclude error alerts, static notice banners, or retry cards
+      if (testId.includes('error') || cls.includes('error') || child.getAttribute('role') === 'alert' ||
+          text.includes('error') || text.includes('troubleshooting') || text.includes('retry')) {
+        return false;
+      }
+
+      // Only count if it genuinely indicates an active running process or has active spin/stop controls
+      const hasActiveControls = child.querySelector('.animate-spin, button[aria-label*="Stop" i], button[aria-label*="Cancel" i]') !== null;
       const isProcess = testId.includes('process') || testId.includes('task') ||
                         cls.includes('process') || cls.includes('task') ||
-                        cls.includes('banner') ||
-                        text.includes('background') || text.includes('running') ||
-                        child.querySelector('.animate-spin, button[aria-label*="Stop" i], button[aria-label*="Cancel" i]') !== null;
+                        text.includes('background') || text.includes('running');
 
-      return isProcess || (text.length > 0 && child.offsetParent !== null);
+      return hasActiveControls || (isProcess && text.length > 0 && child.offsetParent !== null);
     });
 
     return processItems.length;
@@ -965,11 +971,17 @@ function Get-AntigravityComposerTopBarPayload {
           const text = (child.textContent || '').toLowerCase();
           const testId = (child.getAttribute('data-testid') || '').toLowerCase();
           const cls = (child.className || '').toString().toLowerCase();
+          // Never hide error alerts or troubleshooting notices
+          if (testId.includes('error') || cls.includes('error') || child.getAttribute('role') === 'alert' ||
+              text.includes('error') || text.includes('troubleshooting') || text.includes('retry')) {
+            return;
+          }
+
+          const hasActiveControls = child.querySelector('.animate-spin, button[aria-label*="Stop" i], button[aria-label*="Cancel" i]') !== null;
           const isProcess = testId.includes('process') || testId.includes('task') ||
                             cls.includes('process') || cls.includes('task') ||
-                            text.includes('background') || text.includes('running') ||
-                            child.querySelector('.animate-spin, button[aria-label*="Stop" i]') !== null;
-          if (isProcess) {
+                            text.includes('background') || text.includes('running');
+          if (hasActiveControls || isProcess) {
             child.setAttribute('data-gemini-plus-hide-bulky-process', 'true');
           }
         }
