@@ -13,6 +13,12 @@ Antigravity Plus brings seamless Hebrew, Arabic, and bidirectional text renderin
   - Aligns user prompt bubbles, assistant answers, bulleted lists, and blockquotes to `rtl`.
   - Fixes punctuation inversion (periods, exclamation marks, question marks render at the true end of the line).
   - Preserves strict `ltr` on code blocks (`pre`, `code`), inline snippets, file paths, and terminal commands.
+- **Automatic Thinking Process Translation:**
+  - Automatically translates internal reasoning and "Thought for Xs" blocks to Hebrew in real-time via external translation services.
+  - Formats translated thoughts in natural RTL with syntax-preserved code tokens and clean typography.
+- **Smart Actions Collapsible Between Thinking:**
+  - Automatically groups tool calls, command executions, and file operations occurring between thinking steps into clean, collapsible accordions.
+  - Keeps thinking processes visible and readable while keeping dense operational steps neatly folded.
 - **Enhanced Composer Top Bar:**
   - Project workspace switcher button.
   - Active background agent / subagent process badge.

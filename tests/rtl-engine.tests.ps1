@@ -24,6 +24,12 @@ Assert-True ($rtlPayload.Contains('.artifact-card[data-agy-rtl="rtl"]')) 'RTL pa
 Assert-True ($rtlPayload.Contains('ensureMixedLtrTail')) 'RTL payload should include mixed LTR tail isolation.'
 Assert-True ($rtlPayload.Contains('data-agy-rtl-ltr-tail')) 'RTL payload should include LTR tail selector.'
 Assert-True ($rtlPayload.Contains('[contenteditable]')) 'RTL payload should exclude contenteditable elements from processElement and processLists.'
+Assert-True ($rtlPayload.Contains('[data-agy-composer-rtl="rtl"]')) 'RTL payload should include composer RTL selector.'
+Assert-True ($rtlPayload.Contains('[data-agy-composer-rtl="rtl"] p')) 'RTL payload should include composer paragraph styling.'
+Assert-True ($rtlPayload.Contains('[data-agy-composer-rtl="rtl"] [contenteditable="false"]')) 'RTL payload should include composer chips and mention styling.'
+Assert-True ($rtlPayload.Contains('[data-agy-composer-rtl="rtl"] code')) 'RTL payload should include composer code island styling.'
+Assert-True ($rtlPayload.Contains('[data-agy-composer-rtl="rtl"] ol')) 'RTL payload should include composer list styling.'
+Assert-True ($rtlPayload.Contains('hookComposer')) 'RTL payload should include composer hooking function.'
 
 
 $nodeCommand = Get-Command -Name node -ErrorAction SilentlyContinue
@@ -54,6 +60,8 @@ if (helpers.stripDiagnosticPrefix('1. בממשק המשתמש (UI):') !== '1. ב
 if (helpers.proseDirection('Hello world') !== 'ltr') throw new Error('Expected "ltr" prose for English');
 if (helpers.proseDirection('שלום עולם') !== 'rtl') throw new Error('Expected "rtl" prose for Hebrew');
 if (helpers.proseDirection('Please review שלום') !== 'rtl') throw new Error('Expected "rtl" prose for mixed with Hebrew');
+if (helpers.proseDirection('/goal לבצע בדיקת קומפוזר') !== 'rtl') throw new Error('Expected "rtl" prose for slash command with Hebrew');
+if (helpers.proseDirection('@src/main.rs תסביר לי מה הקובץ עושה') !== 'rtl') throw new Error('Expected "rtl" prose for file mention with Hebrew');
 
 // Test code points (Astral Plane 1 - Adlam 0x1E900)
 if (!helpers.isRtlCodePoint(0x1E900)) throw new Error('Expected Adlam 0x1E900 to be recognized as RTL');

@@ -139,6 +139,24 @@ function Get-AntigravityUiEnhancementsPayload {
     return false;
   }
 
+  function expandThinkingTrigger(el) {
+    if (!el || el.getAttribute('data-agy-user-toggled') === 'true') {
+      return;
+    }
+    if (el.getAttribute('aria-expanded') === 'false') {
+      const propsKey = Object.keys(el).find(k => k.startsWith('__reactProps$'));
+      if (propsKey && el[propsKey] && typeof el[propsKey].onClick === 'function') {
+        try {
+          el[propsKey].onClick({ preventDefault: () => {}, stopPropagation: () => {} });
+        } catch (err) {
+          el.click();
+        }
+      } else {
+        el.click();
+      }
+    }
+  }
+
   function collapseTrigger(el) {
     if (!el || el.getAttribute('data-agy-user-toggled') === 'true') {
       return;
@@ -149,13 +167,13 @@ function Get-AntigravityUiEnhancementsPayload {
       return;
     }
 
-    // Never collapse user message steps
     const testId = el.getAttribute('data-testid') || '';
-    if (testId.includes('user')) {
+    // Never collapse user message steps or thinking triggers
+    if (testId.includes('user') || testId === 'thinking-collapsible-trigger') {
       return;
     }
 
-    // 1. Collapsible with aria-expanded="true" (e.g. tool-group-collapsible, thinking-collapsible-trigger)
+    // 1. Collapsible with aria-expanded="true" (e.g. tool-group-collapsible, worked-for-collapsible)
     if (el.getAttribute('aria-expanded') === 'true') {
       const propsKey = Object.keys(el).find(k => k.startsWith('__reactProps$'));
       if (propsKey && el[propsKey] && typeof el[propsKey].onClick === 'function') {
@@ -387,9 +405,17 @@ function Get-AntigravityUiEnhancementsPayload {
     // 2. Prevent auto-scrolling down in conversation viewports
     disableAutoScrollInViewports(root);
 
-    // 3. Check aria-expanded collapsibles (worked-for accordion, tool groups, thinking)
+    // 3. Ensure thinking processes stay shown/expanded
+    const thinkingTriggers = root.querySelectorAll('[data-testid="thinking-collapsible-trigger"]');
+    thinkingTriggers.forEach(el => {
+      if (el.getAttribute('data-agy-user-toggled') !== 'true') {
+        expandThinkingTrigger(el);
+      }
+    });
+
+    // 4. Auto-collapse operations (worked-for accordion, tool groups)
     const collapsibles = root.querySelectorAll(
-      '[data-testid="worked-for-collapsible"][aria-expanded="true"], [data-testid="tool-group-collapsible"][aria-expanded="true"], [data-testid="thinking-collapsible-trigger"][aria-expanded="true"]'
+      '[data-testid="worked-for-collapsible"][aria-expanded="true"], [data-testid="tool-group-collapsible"][aria-expanded="true"]'
     );
     collapsibles.forEach(el => {
       if (el.getAttribute('data-agy-user-toggled') !== 'true') {
@@ -397,7 +423,7 @@ function Get-AntigravityUiEnhancementsPayload {
       }
     });
 
-    // 4. Check command / step elements with expanded output (exclude user-input-step)
+    // 5. Check command / step elements with expanded output (exclude user-input-step)
     const stepElements = root.querySelectorAll(
       '[data-testid="run-command-step"], [data-testid="terminal-run-step"]'
     );
@@ -408,7 +434,7 @@ function Get-AntigravityUiEnhancementsPayload {
     });
   }
 
-  // MutationObserver to auto-collapse newly created or updated running tool groups and commands
+  // MutationObserver to auto-collapse operations while keeping thinking shown
   const observer = new MutationObserver((mutations) => {
     for (const m of mutations) {
       const target = m.target;
@@ -439,9 +465,15 @@ function Get-AntigravityUiEnhancementsPayload {
         if (isUserStep) {
           continue;
         }
-        if (m.attributeName === 'aria-expanded' && target.getAttribute('aria-expanded') === 'true') {
-          if (testId === 'worked-for-collapsible' || testId === 'tool-group-collapsible' || testId === 'thinking-collapsible-trigger' || testId === 'run-command-step' || testId === 'terminal-run-step' || testId.includes('command') || testId.includes('terminal')) {
-            collapseTrigger(target);
+        if (m.attributeName === 'aria-expanded') {
+          if (testId === 'thinking-collapsible-trigger') {
+            if (target.getAttribute('aria-expanded') === 'false') {
+              expandThinkingTrigger(target);
+            }
+          } else if (target.getAttribute('aria-expanded') === 'true') {
+            if (testId === 'worked-for-collapsible' || testId === 'tool-group-collapsible' || testId === 'run-command-step' || testId === 'terminal-run-step' || testId.includes('command') || testId.includes('terminal')) {
+              collapseTrigger(target);
+            }
           }
         } else if (m.attributeName === 'class' && testId === 'worked-for-collapsible') {
           if (target.getAttribute('aria-expanded') === 'true') {
@@ -458,7 +490,9 @@ function Get-AntigravityUiEnhancementsPayload {
             if (testId === 'worked-for-collapsible') {
               formatCollapsibleHeader(node);
             }
-            if ((testId === 'worked-for-collapsible' || testId === 'tool-group-collapsible') && node.getAttribute('aria-expanded') === 'true') {
+            if (testId === 'thinking-collapsible-trigger') {
+              expandThinkingTrigger(node);
+            } else if ((testId === 'worked-for-collapsible' || testId === 'tool-group-collapsible') && node.getAttribute('aria-expanded') === 'true') {
               collapseTrigger(node);
             } else if (testId === 'run-command-step' || testId === 'terminal-run-step' || testId.includes('command') || testId.includes('terminal')) {
               collapseTrigger(node);

@@ -215,9 +215,102 @@ function Get-AntigravityRtlPayload {
         text-align: right !important;
       }
 
-      /* Prompt Composer */
+      /* Prompt Composer & Text Inputs */
       [contenteditable="true"][data-agy-composer-rtl="rtl"],
-      textarea[data-agy-composer-rtl="rtl"] {
+      [contenteditable="true"][data-agy-rtl="rtl"],
+      [contenteditable="true"][dir="rtl"],
+      textarea[data-agy-composer-rtl="rtl"],
+      textarea[data-agy-rtl="rtl"],
+      textarea[dir="rtl"],
+      [role="textbox"][data-agy-composer-rtl="rtl"],
+      [role="textbox"][data-agy-rtl="rtl"],
+      [role="textbox"][dir="rtl"] {
+        direction: rtl !important;
+        text-align: right !important;
+        unicode-bidi: isolate !important;
+      }
+
+      [contenteditable="true"][data-agy-composer-rtl="ltr"],
+      [contenteditable="true"][data-agy-rtl="ltr"],
+      textarea[data-agy-composer-rtl="ltr"],
+      textarea[data-agy-rtl="ltr"],
+      [role="textbox"][data-agy-composer-rtl="ltr"],
+      [role="textbox"][data-agy-rtl="ltr"] {
+        direction: ltr !important;
+        text-align: left !important;
+        unicode-bidi: isolate !important;
+      }
+
+      /* Composer child paragraphs, divs and spans */
+      [data-agy-composer-rtl="rtl"] p,
+      [data-agy-composer-rtl="rtl"] div:not([contenteditable="false"]):not(.cm-editor):not(.monaco-editor),
+      [data-agy-composer-rtl="rtl"] span:not([contenteditable="false"]):not([class*="chip"]):not([class*="pill"]):not([class*="badge"]):not([data-mention]):not([data-token]) {
+        direction: rtl !important;
+        text-align: right !important;
+        unicode-bidi: isolate !important;
+      }
+
+      /* Non-editable tokens, mention chips, file pills, slash commands inside composer */
+      [data-agy-composer-rtl="rtl"] [contenteditable="false"],
+      [data-agy-composer-rtl="rtl"] [data-mention],
+      [data-agy-composer-rtl="rtl"] [data-token],
+      [data-agy-composer-rtl="rtl"] [class*="chip"],
+      [data-agy-composer-rtl="rtl"] [class*="pill"],
+      [data-agy-composer-rtl="rtl"] [class*="badge"],
+      [data-agy-composer-rtl="rtl"] button {
+        direction: ltr !important;
+        text-align: left !important;
+        unicode-bidi: isolate !important;
+        display: inline-flex;
+      }
+
+      /* Keep code, pre, monaco, codemirror in composer strictly LTR */
+      [data-agy-composer-rtl="rtl"] code,
+      [data-agy-composer-rtl="rtl"] pre,
+      [data-agy-composer-rtl="rtl"] kbd,
+      [data-agy-composer-rtl="rtl"] samp,
+      [data-agy-composer-rtl="rtl"] .cm-editor,
+      [data-agy-composer-rtl="rtl"] .monaco-editor,
+      [data-agy-composer-rtl="rtl"] [data-language],
+      [data-agy-composer-rtl="rtl"] [class*="code-"] {
+        direction: ltr !important;
+        text-align: left !important;
+        unicode-bidi: isolate !important;
+      }
+
+      /* Composer lists & blockquotes */
+      [data-agy-composer-rtl="rtl"] ol,
+      [data-agy-composer-rtl="rtl"] ul {
+        direction: rtl !important;
+        text-align: right !important;
+        padding-left: 0 !important;
+        padding-right: 1.5rem !important;
+        list-style-position: outside !important;
+      }
+
+      [data-agy-composer-rtl="rtl"] li {
+        direction: rtl !important;
+        text-align: right !important;
+      }
+
+      [data-agy-composer-rtl="rtl"] li > input[type="checkbox"] {
+        margin-left: 0.5rem !important;
+        margin-right: 0 !important;
+      }
+
+      [data-agy-composer-rtl="rtl"] blockquote {
+        border-left: 0 !important;
+        border-right: 3px solid currentColor !important;
+        padding-left: 0 !important;
+        padding-right: 1rem !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+      }
+
+      /* Force RTL mode (Ctrl+Shift+R) */
+      body[data-agy-force-rtl="true"] [contenteditable="true"],
+      body[data-agy-force-rtl="true"] textarea,
+      body[data-agy-force-rtl="true"] [role="textbox"] {
         direction: rtl !important;
         text-align: right !important;
         unicode-bidi: isolate !important;
@@ -499,39 +592,106 @@ function Get-AntigravityRtlPayload {
   }
 
   function hookComposer() {
-    const composers = document.querySelectorAll('[contenteditable="true"], textarea');
+    const composers = document.querySelectorAll('[contenteditable="true"], textarea, [role="textbox"]');
     composers.forEach((composer) => {
-      if (composer.__agy_composer_hooked) return;
-      composer.__agy_composer_hooked = true;
-
-      // Native browser bidi support
-      if (composer.getAttribute('dir') !== 'auto') {
-        composer.setAttribute('dir', 'auto');
-      }
-      if (composer.style.textAlign !== 'start') {
-        composer.style.textAlign = 'start';
-      }
-      if (composer.style.unicodeBidi !== 'plaintext') {
-        composer.style.unicodeBidi = 'plaintext';
-      }
-
       const updateComposerDirection = () => {
-        const text = composer.innerText || composer.value || '';
-        const dir = RTL_SHARED.classifyDirection(text);
-        if (dir === 'rtl') {
-          composer.setAttribute('data-agy-composer-rtl', 'rtl');
-        } else if (dir === 'ltr') {
-          composer.removeAttribute('data-agy-composer-rtl');
-        } else {
-          // When empty, remove attribute
-          if (!text.trim()) {
-            composer.removeAttribute('data-agy-composer-rtl');
+        const fullText = composer.innerText || composer.value || composer.textContent || '';
+        const isRtl = RTL_SHARED.hasRtlCodePoint ? RTL_SHARED.hasRtlCodePoint(fullText) : false;
+        const hasText = fullText.trim().length > 0;
+
+        if (isRtl) {
+          if (composer.getAttribute('data-agy-composer-rtl') !== 'rtl') {
+            composer.setAttribute('data-agy-composer-rtl', 'rtl');
           }
+          if (composer.getAttribute('data-agy-rtl') !== 'rtl') {
+            composer.setAttribute('data-agy-rtl', 'rtl');
+          }
+          if (composer.getAttribute('dir') !== 'rtl') {
+            composer.setAttribute('dir', 'rtl');
+          }
+          if (composer.style.direction !== 'rtl') {
+            composer.style.direction = 'rtl';
+          }
+          if (composer.style.textAlign !== 'right') {
+            composer.style.textAlign = 'right';
+          }
+          if (composer.style.unicodeBidi !== 'isolate') {
+            composer.style.unicodeBidi = 'isolate';
+          }
+        } else if (hasText) {
+          if (composer.getAttribute('data-agy-composer-rtl') !== 'ltr') {
+            composer.setAttribute('data-agy-composer-rtl', 'ltr');
+          }
+          if (composer.getAttribute('data-agy-rtl') !== 'ltr') {
+            composer.setAttribute('data-agy-rtl', 'ltr');
+          }
+          if (composer.getAttribute('dir') !== 'ltr') {
+            composer.setAttribute('dir', 'ltr');
+          }
+          if (composer.style.direction !== 'ltr') {
+            composer.style.direction = 'ltr';
+          }
+          if (composer.style.textAlign !== 'left') {
+            composer.style.textAlign = 'left';
+          }
+          if (composer.style.unicodeBidi !== 'isolate') {
+            composer.style.unicodeBidi = 'isolate';
+          }
+        } else {
+          // When empty, reset to neutral/auto
+          composer.removeAttribute('data-agy-composer-rtl');
+          composer.removeAttribute('data-agy-rtl');
+          if (composer.getAttribute('dir') !== 'auto') {
+            composer.setAttribute('dir', 'auto');
+          }
+          composer.style.direction = '';
+          composer.style.textAlign = '';
+          composer.style.unicodeBidi = '';
+        }
+
+        // Also handle child block elements in rich contenteditable
+        if (composer.isContentEditable) {
+          const childBlocks = composer.querySelectorAll(':scope > p, :scope > div, :scope > blockquote, :scope > ul, :scope > ol');
+          childBlocks.forEach((block) => {
+            if (block.getAttribute('contenteditable') === 'false') return;
+            const blockText = block.innerText || block.textContent || '';
+            if (RTL_SHARED.hasRtlCodePoint && RTL_SHARED.hasRtlCodePoint(blockText)) {
+              if (block.getAttribute('data-agy-rtl') !== 'rtl') block.setAttribute('data-agy-rtl', 'rtl');
+              if (block.getAttribute('dir') !== 'rtl') block.setAttribute('dir', 'rtl');
+              if (block.style.direction !== 'rtl') block.style.direction = 'rtl';
+              if (block.style.textAlign !== 'right') block.style.textAlign = 'right';
+              if (block.style.unicodeBidi !== 'isolate') block.style.unicodeBidi = 'isolate';
+            } else if (blockText.trim()) {
+              if (block.getAttribute('data-agy-rtl') !== 'ltr') block.setAttribute('data-agy-rtl', 'ltr');
+              if (block.getAttribute('dir') !== 'ltr') block.setAttribute('dir', 'ltr');
+              if (block.style.direction !== 'ltr') block.style.direction = 'ltr';
+              if (block.style.textAlign !== 'left') block.style.textAlign = 'left';
+              if (block.style.unicodeBidi !== 'isolate') block.style.unicodeBidi = 'isolate';
+            } else {
+              block.removeAttribute('data-agy-rtl');
+              block.removeAttribute('dir');
+              block.style.direction = '';
+              block.style.textAlign = '';
+              block.style.unicodeBidi = '';
+            }
+          });
         }
       };
 
-      composer.addEventListener('input', updateComposerDirection, { passive: true });
-      composer.addEventListener('keyup', updateComposerDirection, { passive: true });
+      composer.__agy_update_direction = updateComposerDirection;
+
+      if (!composer.__agy_composer_hooked) {
+        composer.__agy_composer_hooked = true;
+        composer.addEventListener('input', updateComposerDirection, { passive: true });
+        composer.addEventListener('keyup', updateComposerDirection, { passive: true });
+        composer.addEventListener('change', updateComposerDirection, { passive: true });
+        composer.addEventListener('paste', () => setTimeout(updateComposerDirection, 0), { passive: true });
+        composer.addEventListener('cut', () => setTimeout(updateComposerDirection, 0), { passive: true });
+        composer.addEventListener('drop', () => setTimeout(updateComposerDirection, 0), { passive: true });
+        composer.addEventListener('compositionend', updateComposerDirection, { passive: true });
+        composer.addEventListener('focus', updateComposerDirection, { passive: true });
+      }
+
       updateComposerDirection();
     });
   }
@@ -542,22 +702,25 @@ function Get-AntigravityRtlPayload {
     if (!mount) return result;
     const probe = document.createElement('div');
     probe.style.cssText = 'position:fixed;left:-10000px;top:-10000px;visibility:hidden;';
-    probe.innerHTML = '<ol><li>1. בממשק המשתמש (UI):</li></ol><div class="artifact-card"><button><span>Walkthrough</span></button><span class="line-clamp-3">תוכנית מימוש להוספת אקורדיון.</span></div>';
+    probe.innerHTML = '<ol><li>1. בממשק המשתמש (UI):</li></ol><div class="artifact-card"><button><span>Walkthrough</span></button><span class="line-clamp-3">תוכנית מימוש להוספת אקורדיון.</span></div><textarea class="agy-probe-textarea">בדיקת קלט בעברית</textarea>';
     mount.appendChild(probe);
     try {
       processLists(probe);
       processArtifactCards(probe);
+      hookComposer();
       const list = probe.querySelector('ol');
       const item = probe.querySelector('li');
       const card = probe.querySelector('.artifact-card');
       const summary = probe.querySelector('.line-clamp-3');
       const btn = probe.querySelector('button');
+      const txt = probe.querySelector('textarea');
       result.listRtl = list?.getAttribute('dir') === 'rtl';
       result.itemRtl = item?.getAttribute('dir') === 'rtl';
       result.cardRtl = card?.getAttribute('dir') === 'rtl';
       result.summaryRtl = summary?.getAttribute('dir') === 'rtl';
       result.btnLtr = btn?.getAttribute('dir') === 'ltr';
-      result.ok = Boolean(result.listRtl && result.itemRtl && result.cardRtl && result.summaryRtl && result.btnLtr);
+      result.composerRtl = txt?.getAttribute('data-agy-composer-rtl') === 'rtl' && txt?.getAttribute('dir') === 'rtl';
+      result.ok = Boolean(result.listRtl && result.itemRtl && result.cardRtl && result.summaryRtl && result.btnLtr && result.composerRtl);
     } catch (e) {
       result.error = String(e?.message || e);
     } finally {
