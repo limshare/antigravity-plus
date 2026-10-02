@@ -6,8 +6,6 @@ function Get-AntigravityPayloadBundle {
     $sidebar = Get-AntigravitySidebarEnhancementsPayload
     $composerTopBar = Get-AntigravityComposerTopBarPayload
     $newWindow = Get-AntigravityNewWindowButtonPayload
-    $translator = Get-AntigravityThinkingTranslatorPayload
-    $actionsCollapsible = Get-AntigravityActionsCollapsiblePayload
 
     return @"
 // Antigravity Plus Runtime Bundle
@@ -46,16 +44,6 @@ function Get-AntigravityPayloadBundle {
         $newWindow
     } catch(e) {
         console.error('[Antigravity Plus] New window button payload error:', e);
-    }
-    try {
-        $translator
-    } catch(e) {
-        console.error('[Antigravity Plus] Thinking translator payload error:', e);
-    }
-    try {
-        $actionsCollapsible
-    } catch(e) {
-        console.error('[Antigravity Plus] Actions collapsible payload error:', e);
     }
     try {
         window.__GEMINI_PLUS_INJECTION_READY = true;

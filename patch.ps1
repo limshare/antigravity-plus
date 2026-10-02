@@ -33,8 +33,6 @@ $modules = @(
     'src\antigravity\sidebar-enhancements.ps1',
     'src\antigravity\composer-top-bar.ps1',
     'src\antigravity\new-window-button.ps1',
-    'src\antigravity\thinking-translator.ps1',
-    'src\antigravity\actions-collapsible.ps1',
     'src\antigravity\payload-bundle.ps1',
     'src\runtime\files.ps1',
     'src\runtime\state.ps1',

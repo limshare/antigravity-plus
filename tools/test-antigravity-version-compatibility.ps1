@@ -53,15 +53,15 @@ Assert-Check "PowerShell Syntax Validation" {
 . (Join-Path $rootDir 'src\antigravity\sidebar-enhancements.ps1')
 . (Join-Path $rootDir 'src\antigravity\composer-top-bar.ps1')
 . (Join-Path $rootDir 'src\antigravity\new-window-button.ps1')
-. (Join-Path $rootDir 'src\antigravity\thinking-translator.ps1')
-. (Join-Path $rootDir 'src\antigravity\actions-collapsible.ps1')
 . (Join-Path $rootDir 'src\antigravity\payload-bundle.ps1')
 . (Join-Path $rootDir 'src\runtime\files.ps1')
-. (Join-Path $rootDir 'src\runtime\state.ps1')
 . (Join-Path $rootDir 'src\runtime\reply-language.ps1')
+. (Join-Path $rootDir 'src\runtime\state.ps1')
 . (Join-Path $rootDir 'src\runtime\shortcuts.ps1')
 . (Join-Path $rootDir 'src\runtime\launch.ps1')
 . (Join-Path $rootDir 'src\runtime\patching.ps1')
+. (Join-Path $rootDir 'src\runtime\updater.ps1')
+. (Join-Path $rootDir 'src\ui\menu.ps1')
 
 Assert-Check "Module Loading & Dot-sourcing" {
     if (-not (Get-Command Get-AntigravityPayloadBundle -ErrorAction SilentlyContinue)) {
