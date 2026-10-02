@@ -5,50 +5,50 @@
                   {
                       "path":  "patch.ps1",
                       "target":  "patch.ps1",
-                      "size":  2406,
-                      "sha256":  "a0cae203a6c53b1b39142d696630e4c512deda656ffa78b96e50b76b781a181a"
+                      "size":  2504,
+                      "sha256":  "10bdf0260613a4419d55186f830bc00ed16269f9c86bcd329d68e1a08f378b0b"
                   },
                   {
                       "path":  "src/shared/logging.ps1",
                       "target":  "src/shared/logging.ps1",
-                      "size":  435,
-                      "sha256":  "ee8491906727ba411ac99ef62ec0b7358d4ce7cdb248cb62533463a237e912d3"
+                      "size":  454,
+                      "sha256":  "6d8b8d0449e4efbdc1f71b48070e5814967655e258cbfdecc0e881a343698fea"
                   },
                   {
                       "path":  "src/shared/prompting.ps1",
                       "target":  "src/shared/prompting.ps1",
-                      "size":  1419,
-                      "sha256":  "7742dea43c0bdbe5ff752c4c37321ac1e5f82b4c583ba32f6aa767f9565e77df"
+                      "size":  1465,
+                      "sha256":  "ffb402a0ad485575a931a46c790371a608331139b07b3a3e690d2ddf4ab777f2"
                   },
                   {
                       "path":  "src/shared/asar.ps1",
                       "target":  "src/shared/asar.ps1",
-                      "size":  3348,
-                      "sha256":  "e551c938d844938733e0e20d997e395ed5a4964c6fba4099c1f848354c19b1bb"
+                      "size":  3445,
+                      "sha256":  "4f921bbacdcee0b5a08816f372681e66648f01e33c505c2002e90de796f7681b"
                   },
                   {
                       "path":  "src/shared/cdp.ps1",
                       "target":  "src/shared/cdp.ps1",
-                      "size":  8713,
-                      "sha256":  "52d756082f8b1d81f6470c8ce8ff0190eecf3304b3c283334f2be0fde0331eb6"
+                      "size":  8949,
+                      "sha256":  "e936ccdc93e1aefa3d6b676784d2dec006d769f02f517ab343435436cc34aedc"
                   },
                   {
                       "path":  "src/antigravity/detection.ps1",
                       "target":  "src/antigravity/detection.ps1",
-                      "size":  5823,
-                      "sha256":  "b57908769ca695be288ef8a1af236c3aa47e3d5d13273f2ffb60861261a590e8"
+                      "size":  6010,
+                      "sha256":  "bbaf87b00bd035e6468b07269515d0fa27deccdbf15f8d72c102005cc2ed0530"
                   },
                   {
                       "path":  "src/antigravity/rtl-shared.ps1",
                       "target":  "src/antigravity/rtl-shared.ps1",
-                      "size":  6613,
-                      "sha256":  "8d41c0751213c237584d7e57300ec2e0e1777736b889501a6349ee2fd9a08288"
+                      "size":  6807,
+                      "sha256":  "44389f0679da785b89de330276dc05eb6fbb375372cccbeca16cc25878466be0"
                   },
                   {
                       "path":  "src/antigravity/rtl-payload.ps1",
                       "target":  "src/antigravity/rtl-payload.ps1",
-                      "size":  31529,
-                      "sha256":  "40719f627a4dd55cdf519898936df585338edc5f6f1899cc7107140b22c282e7"
+                      "size":  32302,
+                      "sha256":  "a8f89ca2c66e9002e5381f02df335b86bafb9a4f963eab7493e5b535724ce559"
                   },
                   {
                       "path":  "src/antigravity/ui-enhancements.ps1",
@@ -59,8 +59,8 @@
                   {
                       "path":  "src/antigravity/context-badge.ps1",
                       "target":  "src/antigravity/context-badge.ps1",
-                      "size":  14233,
-                      "sha256":  "545539a83eb98ff62328c42e9618d400db53cc11530ca611fb09c023163b21ed"
+                      "size":  18590,
+                      "sha256":  "1f7433507038c2789063c0ecba2855f659cb678242eecd59857fd3b077316c3a"
                   },
                   {
                       "path":  "src/antigravity/sidebar-enhancements.ps1",
@@ -77,62 +77,62 @@
                   {
                       "path":  "src/antigravity/new-window-button.ps1",
                       "target":  "src/antigravity/new-window-button.ps1",
-                      "size":  15371,
-                      "sha256":  "064cbc0831dcba778729daf6fd0184cb2c6b1953b66570cc007a7cce2fcd211a"
+                      "size":  15714,
+                      "sha256":  "5cb5e8bf9e70657f2022b61431e2c53c218bac0c133dc9d05c626cdc703e3aa7"
                   },
                   {
                       "path":  "src/antigravity/payload-bundle.ps1",
                       "target":  "src/antigravity/payload-bundle.ps1",
-                      "size":  1396,
-                      "sha256":  "43e956230c520719f6f044fb98f62901ddaf639ca1826eaa08d6b825ebf8a94e"
+                      "size":  1449,
+                      "sha256":  "c4e567ae97a0f3f23f740c9019c65200114bbfec90771e682dcc679b88b48638"
                   },
                   {
                       "path":  "src/runtime/files.ps1",
                       "target":  "src/runtime/files.ps1",
-                      "size":  7120,
-                      "sha256":  "5cc5067a2183a9c12a305164db2f16e9bb666a7b068446e5135604255c283483"
+                      "size":  7291,
+                      "sha256":  "598b57dbb2289228db8e889118543ab32adbb0e93d092dc1fb8849b84b00bfe0"
                   },
                   {
                       "path":  "src/runtime/reply-language.ps1",
                       "target":  "src/runtime/reply-language.ps1",
-                      "size":  1174,
-                      "sha256":  "f75ced25c2e0d8c7c38aa7058f9e40f317d85c2a759d7c86a52796895ce67deb"
+                      "size":  1197,
+                      "sha256":  "f4cd0c1ef8efa2637d7b8ee1d0a70d7f268c5ff7c293f2667b3db1b227351ff3"
                   },
                   {
                       "path":  "src/runtime/state.ps1",
                       "target":  "src/runtime/state.ps1",
-                      "size":  2269,
-                      "sha256":  "9e6c9dfaa738ef650f4fd89873e7039112f28f7f32b3071928f3e2d2c568ddcd"
+                      "size":  2333,
+                      "sha256":  "dc8e23e728425698ec64e790ad487aecfe34575f98e772cf716265e28c415088"
                   },
                   {
                       "path":  "src/runtime/shortcuts.ps1",
                       "target":  "src/runtime/shortcuts.ps1",
-                      "size":  3372,
-                      "sha256":  "2e1f67568cddf1c2348b763934828b5b0db7f6b87acdb42376c9c2110bf40f9d"
+                      "size":  3477,
+                      "sha256":  "3785a059a4896c15608208d55b9abf4edba9d8d045c9e5472db3a494aa62022a"
                   },
                   {
                       "path":  "src/runtime/launch.ps1",
                       "target":  "src/runtime/launch.ps1",
-                      "size":  39397,
-                      "sha256":  "bf5736d62447620b5f1c1c5f979f2d12e90caf59933d274b2fbda0caadfdd8c9"
+                      "size":  40400,
+                      "sha256":  "76f8d97e88fa9d01993fb81dababb0bcc4d5c654de70372e3787176e4270ad23"
                   },
                   {
                       "path":  "src/runtime/patching.ps1",
                       "target":  "src/runtime/patching.ps1",
-                      "size":  3713,
-                      "sha256":  "5858e2c8b847845c927b9bae19a16148776b2813a0cd6b8fb2dfb5f20d3bc86a"
+                      "size":  3811,
+                      "sha256":  "ec55c52c195e1c09c41efdc1150bcd66ce8256d94eabe146932d2d7c13fb958b"
                   },
                   {
                       "path":  "src/runtime/updater.ps1",
                       "target":  "src/runtime/updater.ps1",
-                      "size":  10730,
-                      "sha256":  "1a7d0b4efe438c0e12357bf7aaf7e6b6b5c58f94ef5f1017af2fadbb864ab1fc"
+                      "size":  10891,
+                      "sha256":  "12cdf702a08146927cdee293cb01e70d733338938baf4277e86ba451ab0a0c10"
                   },
                   {
                       "path":  "src/ui/menu.ps1",
                       "target":  "src/ui/menu.ps1",
-                      "size":  1956,
-                      "sha256":  "fd768a21a9803fcfe15052d76d2883c6372ff5fd4e8647ae8003f056efb761d0"
+                      "size":  2017,
+                      "sha256":  "52b69a4c42952e5be7204931dde4d90200a314d219e8eb9cda92dafef588d717"
                   }
               ]
 }

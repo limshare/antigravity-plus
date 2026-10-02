@@ -3,11 +3,13 @@ function Get-AntigravityContextBadgePayload {
 (function () {
   const BADGE_ID = 'data-gemini-plus-top-badge';
 
-  if (window.__GEMINI_PLUS_CONTEXT_BADGE && window.__GEMINI_PLUS_CONTEXT_BADGE.observer) {
-    try { window.__GEMINI_PLUS_CONTEXT_BADGE.observer.disconnect(); } catch (e) {}
+  if (window.__GEMINI_PLUS_CONTEXT_BADGE) {
+    try { window.__GEMINI_PLUS_CONTEXT_BADGE.cleanup?.(); } catch (e) {}
+    try { window.__GEMINI_PLUS_CONTEXT_BADGE.observer?.disconnect(); } catch (e) {}
   }
-  if (window.__ANTIGRAVITY_PLUS_CONTEXT_BADGE && window.__ANTIGRAVITY_PLUS_CONTEXT_BADGE.observer) {
-    try { window.__ANTIGRAVITY_PLUS_CONTEXT_BADGE.observer.disconnect(); } catch (e) {}
+  if (window.__ANTIGRAVITY_PLUS_CONTEXT_BADGE) {
+    try { window.__ANTIGRAVITY_PLUS_CONTEXT_BADGE.cleanup?.(); } catch (e) {}
+    try { window.__ANTIGRAVITY_PLUS_CONTEXT_BADGE.observer?.disconnect(); } catch (e) {}
   }
 
   // Cleanup any legacy badges
@@ -16,7 +18,26 @@ function Get-AntigravityContextBadgePayload {
   } catch (e) {}
 
   const INSTANCE_ID = (window.__GEMINI_PLUS_BADGE_INSTANCE = (window.__GEMINI_PLUS_BADGE_INSTANCE || 0) + 1);
-  const BADGE_RELEVANT_SELECTOR = '[data-testid="title-menu-bar"], [data-testid="model-selector-trigger"], [aria-label*="Context" i]';
+  const NEW_WINDOW_BUTTON_SELECTOR = [
+    '[data-antigravity-plus-new-window-wrapper]',
+    '[data-antigravity-plus-shared-window-button]',
+    '[data-gemini-plus-shared-window-button]',
+    '[data-testid="title-menu-bar-new-window-btn"]'
+  ].join(',');
+  const WINDOW_CONTROL_SELECTOR = [
+    'button[aria-label="Minimize"]',
+    'button[aria-label="Maximize"]',
+    'button[aria-label="Restore"]',
+    'button[aria-label="Close"]',
+    '[data-window-control]'
+  ].join(',');
+  const BADGE_RELEVANT_SELECTOR = [
+    '[data-testid="title-menu-bar"]',
+    '[data-testid="model-selector-trigger"]',
+    '[aria-label*="Context" i]',
+    NEW_WINDOW_BUTTON_SELECTOR,
+    WINDOW_CONTROL_SELECTOR
+  ].join(',');
   let statusText = '';
   let cachedUserStatus = null;
   let cachedQuotaSummary = null;
@@ -210,6 +231,70 @@ function Get-AntigravityContextBadgePayload {
     return cachedQuotaText;
   }
 
+  function getControlsLeft(scopeDoc, viewportWidth) {
+    const domControls = Array.from(scopeDoc.querySelectorAll(WINDOW_CONTROL_SELECTOR));
+    for (const ctrl of domControls) {
+      const r = ctrl.getBoundingClientRect();
+      if (r.left > viewportWidth * 0.5 && r.width > 0) return r.left;
+    }
+    // Native window caption buttons in Windows Electron are ~140px wide
+    return Math.max(0, viewportWidth - 140);
+  }
+
+  function getGapStart(scopeDoc, viewportWidth) {
+    const newWindow = scopeDoc.querySelector(NEW_WINDOW_BUTTON_SELECTOR);
+    const wrapper = newWindow?.closest('[data-antigravity-plus-new-window-wrapper]');
+    const targetEl = wrapper || newWindow;
+    const rect = targetEl?.getBoundingClientRect();
+    if (rect && Number.isFinite(rect.right) && rect.right > 0) {
+      return rect.right;
+    }
+    const menuBar = scopeDoc.querySelector('[data-testid="title-menu-bar"]');
+    if (menuBar) {
+      const children = Array.from(menuBar.children).filter((c) => c.getAttribute(BADGE_ID) !== 'true');
+      const lastItem = children[children.length - 1];
+      if (lastItem) {
+        const itemRect = lastItem.getBoundingClientRect();
+        if (itemRect && Number.isFinite(itemRect.right) && itemRect.right > 0) {
+          return itemRect.right;
+        }
+      }
+    }
+    return viewportWidth * 0.3;
+  }
+
+  function positionBadge(scopeDoc, badge) {
+    if (!badge) return;
+    const viewportWidth = Math.max(scopeDoc.defaultView?.innerWidth || 0, scopeDoc.documentElement?.clientWidth || 1);
+    const controlsLeft = getControlsLeft(scopeDoc, viewportWidth);
+    const gapStart = getGapStart(scopeDoc, viewportWidth);
+    const center = gapStart + Math.max(0, controlsLeft - gapStart) / 2;
+    const availableWidth = Math.max(0, controlsLeft - gapStart - 24);
+
+    badge.style.position = 'fixed';
+    badge.style.setProperty('inset', '8px auto auto auto', 'important');
+    badge.style.setProperty('inset-inline-start', center + 'px', 'important');
+    badge.style.setProperty('inset-inline-end', 'auto', 'important');
+    badge.style.setProperty('transform', 'translateX(-50%)', 'important');
+    badge.style.maxWidth = availableWidth + 'px';
+  }
+
+  function fitBadgeText(scopeDoc, badge, fullText) {
+    const withoutResets = fullText.replace(/\s*(?:·|-|,)+\s*resets\s+(?:in|now)[^|]*/gi, '');
+    const firstBucket = withoutResets.split('|')[0]?.trim() || withoutResets;
+    const candidates = [fullText, withoutResets, firstBucket];
+
+    const viewportWidth = Math.max(scopeDoc.defaultView?.innerWidth || 0, scopeDoc.documentElement?.clientWidth || 1);
+    const controlsLeft = getControlsLeft(scopeDoc, viewportWidth);
+    const gapStart = getGapStart(scopeDoc, viewportWidth);
+    const availableWidth = Math.max(0, controlsLeft - gapStart - 24);
+
+    for (const candidate of candidates) {
+      badge.textContent = candidate;
+      if (badge.scrollWidth <= availableWidth || candidate === firstBucket) return;
+    }
+  }
+
   function ensureBadge(scopeDoc) {
     if (!scopeDoc) return;
 
@@ -225,9 +310,7 @@ function Get-AntigravityContextBadgePayload {
       badge.setAttribute(BADGE_ID, 'true');
       badge.setAttribute('aria-hidden', 'true');
       badge.style.position = 'fixed';
-      badge.style.insetInlineStart = '50%';
       badge.style.top = '8px';
-      badge.style.transform = 'translateX(-50%)';
       badge.style.zIndex = '2147483647';
       badge.style.pointerEvents = 'none';
       badge.style.userSelect = 'none';
@@ -242,7 +325,8 @@ function Get-AntigravityContextBadgePayload {
       badge.style.display = 'inline-flex';
       badge.style.width = 'max-content';
       badge.style.maxWidth = 'calc(100vw - 240px)';
-      badge.style.overflow = 'visible';
+      badge.style.overflow = 'hidden';
+      badge.style.textOverflow = 'ellipsis';
       badge.style.font = '600 13px/1.2 system-ui, -apple-system, sans-serif';
       badge.style.color = '#9ca3af';
     }
@@ -259,9 +343,9 @@ function Get-AntigravityContextBadgePayload {
 
     const quotaInfo = getGeminiQuotaText(scopeDoc);
     const nextText = stripBidiMarks(['Plus', quotaInfo || statusText].filter(Boolean).join(' '));
-    if (badge.textContent !== nextText) {
-      badge.textContent = nextText;
-    }
+    fitBadgeText(scopeDoc, badge, nextText);
+    positionBadge(scopeDoc, badge);
+    window.setTimeout(() => positionBadge(scopeDoc, badge), 250);
   }
 
   let pending = false;
@@ -349,8 +433,18 @@ function Get-AntigravityContextBadgePayload {
     observe();
   };
 
+  const onResize = () => schedule();
+  window.addEventListener('resize', onResize, { passive: true });
+
+  const cleanup = () => {
+    disconnect();
+    try { window.removeEventListener('resize', onResize); } catch (e) {}
+    try { window.clearInterval(refreshInterval); } catch (e) {}
+  };
+
   window.__GEMINI_PLUS_CONTEXT_BADGE = {
     apply,
+    cleanup,
     observer,
     setStatus(nextStatus) {
       statusText = normalizeText(nextStatus);
@@ -372,7 +466,7 @@ function Get-AntigravityContextBadgePayload {
   // Periodic background refresh every 30s
   const refreshInterval = window.setInterval(() => {
     if (window.__GEMINI_PLUS_BADGE_INSTANCE !== INSTANCE_ID) {
-      window.clearInterval(refreshInterval);
+      cleanup();
       return;
     }
     fetchGeminiUserStatus();
